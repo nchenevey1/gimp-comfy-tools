@@ -1,0 +1,109 @@
+{
+  "2": {
+    "inputs": {
+      "categories": "boat",
+      "confidence_threshold": 0.1,
+      "iou_threshold": 0.1,
+      "box_thickness": 2,
+      "text_thickness": 2,
+      "text_scale": 1,
+      "with_confidence": true,
+      "with_class_agnostic_nms": false,
+      "with_segmentation": true,
+      "mask_combined": false,
+      "mask_extracted": false,
+      "mask_extracted_index": 0,
+      "yolo_world_model": [
+        "3",
+        0
+      ],
+      "esam_model": [
+        "4",
+        0
+      ],
+      "image": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "Yoloworld_ESAM_Zho",
+    "_meta": {
+      "title": "🔎Yoloworld ESAM"
+    }
+  },
+  "3": {
+    "inputs": {
+      "yolo_world_model": "yolo_world/l"
+    },
+    "class_type": "Yoloworld_ModelLoader_Zho",
+    "_meta": {
+      "title": "🔎Yoloworld Model Loader"
+    }
+  },
+  "4": {
+    "inputs": {
+      "device": "CUDA"
+    },
+    "class_type": "ESAM_ModelLoader_Zho",
+    "_meta": {
+      "title": "🔎ESAM Model Loader"
+    }
+  },
+  "5": {
+    "inputs": {
+      "images": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "mask": [
+        "2",
+        1
+      ]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Convert Mask to Image"
+    }
+  },
+  "7": {
+    "inputs": {
+      "images": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "9": {
+    "inputs": {
+      "image": ""
+    },
+    "class_type": "ETN_LoadImageBase64",
+    "_meta": {
+      "title": "Load Image (Base64)"
+    }
+  },
+  "10": {
+    "inputs": {
+      "images": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "ETN_SendImageWebSocket",
+    "_meta": {
+      "title": "Send Image (WebSocket)"
+    }
+  }
+}
