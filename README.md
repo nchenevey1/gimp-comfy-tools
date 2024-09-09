@@ -1,4 +1,4 @@
-# GIMP Plugins with ComfyUI
+# GIMP Plugins with ComfyUI (WIP)
 
 GIMP plugins that communicate with ComfyUI.
 
