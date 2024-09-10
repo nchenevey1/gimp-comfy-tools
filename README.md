@@ -4,6 +4,7 @@ GIMP plugins that communicate with ComfyUI.
 
 * <a href="#plugins">GIMP Plugins Basic Instructions</a>
 * <a href="#websocket">GIMP and Websocket
+* <a href="#YOLO">Yolo Instructions
 * <a href="#info">General Information</a>
 
 ## <a id="plugins" href="#toc">GIMP Plugins Basic Instructions</a>
@@ -27,6 +28,13 @@ GIMP plugins that communicate with ComfyUI.
 
 * Now you can run the command to download and install:  
 `.\python.exe -m pip install websocket-client`
+
+## <a id="YOLO" href="#toc">Yolo Instructions</a>
+Download the models and follow the instructions outlined in this video:
+
+https://www.youtube.com/watch?v=wEd1wPlCBaQ
+
+Thank you to ControlAltAI
 
 ## <a id="info" href="#toc">General Information</a>
 * Must have https://github.com/nchenevey1/comfyui-gimp-nodes for sending and receiving websocket RGBA data
