@@ -21,17 +21,11 @@ def queue_prompt(prompt):
     req =  urllib2.Request("http://{}/prompt".format(server_address), data=data)
     return json.loads(urllib2.urlopen(req).read())
 
-def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, ckpt_name, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, Lora_list, lora_dict):
+def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, height, width, ckpt_name, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, Lora_list, lora_dict):
     for node in workflow:
             # Find default checkpoint node
             if workflow[node]["class_type"] == "CheckPointLoaderSimple":
                 workflow[node]["inputs"]["ckpt_name"] = ckpt_name
-
-            # Find default LoraLoader node
-            # if workflow[node]["class_type"] == "LoraLoader":
-            #     workflow[node]["inputs"]["lora_name"] = Lora_list.pop(0)
-            #     workflow[node]["inputs"]["strength_model"] = lora_dict[workflow[node]["inputs"]["lora_name"]][0]
-            #     workflow[node]["inputs"]["strength_clip"] = lora_dict[workflow[node]["inputs"]["lora_name"]][1]
             
             # Find Lora Loader Stack (rgthree) node
             if workflow[node]["class_type"] == "Lora Loader Stack (rgthree)":
@@ -61,12 +55,16 @@ def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, ckpt_name, pos
                 workflow[node]["inputs"]["scheduler"] = scheduler
                 workflow[node]["inputs"]["denoise"] = denoise
 
-            # Find comfyui-tooling load image node
-            if workflow[node]["class_type"] == "ETN_LoadImageBase64":
-                workflow[node]["inputs"]["image"] = str(base64_utf8_str)
-            # Find comfyui-tooling load mask node
-            if workflow[node]["class_type"] == "ETN_LoadMaskBase64":
-                workflow[node]["inputs"]["mask"] = str(base64_utf8_str_mask)
+            # Find load image node
+            if workflow[node]["class_type"] == "NC_LoadImageGIMP":
+                workflow[node]["inputs"]["image"] = base64_utf8_str
+                workflow[node]["inputs"]["height"] = height
+                workflow[node]["inputs"]["width"] = width
+            # Find load mask node
+            if workflow[node]["class_type"] == "NC_LoadMaskGIMP":
+                workflow[node]["inputs"]["mask"] = base64_utf8_str_mask
+                workflow[node]["inputs"]["height"] = height
+                workflow[node]["inputs"]["width"] = width
 
     return workflow
 
@@ -82,6 +80,34 @@ def createOptions(name,pairs): # by Ofnuts on gimp-forum.net
                     +[[(label,i) for i,(symbol,label) in enumerate(pairs)]]
                     ))
     return opts
+
+def get_image_encoded(pixel_region):
+    pixChars = pixel_region[:,:]
+    base64_utf8_str = base64.b64encode(pixChars)
+    return base64_utf8_str
+
+def get_selection_mask_encoded(image, height, width):
+    # Get mask from selection
+    image_mask = image.selection
+
+    # If no selection, fill mask with white
+    if pdb.gimp_selection_is_empty(image):
+        pdb.gimp_drawable_fill(image_mask, 2)
+
+    # Create new temporary mask layer
+    mask_layer = pdb.gimp_layer_new_from_drawable(image_mask, image)
+    mask_layer.add_alpha()
+    mask_region = mask_layer.get_pixel_rgn(0, 0, width, height)
+    maskChars = mask_region[:,:]
+    base64_utf8_str_mask = base64.b64encode(maskChars)
+    return base64_utf8_str_mask
+
+def is_jsonable(x):
+    try:
+        json.loads(x)
+        return True
+    except (TypeError, OverflowError, ValueError):
+        return False
 
 # Create Sampler and Scheduler options
 SamplerOptions = createOptions("Sampler", [("euler","euler"), ("euler_cfg_pp","euler_cfg_pp"), ("euler_ancestral","euler_ancestral"), ("euler_ancestral_cfg_pp","euler_ancestral_cfg_pp"), 
@@ -99,43 +125,29 @@ client_id = str(uuid.uuid4())
 
 ############################################################################################################
 #### MAIN FUNCTION ####
-def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4, image, tempDirectory) :
+def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4, image) :
+
+    if workflow_path.isspace() or checkpoint.isspace() or steps.isspace() or sampler.isspace() or scheduler.isspace() or denoise.isspace():
+        gimp.message("Please fill in all fields.")
+        return
 
     # Set to random seed if seed is 0
     rand_seed = random.randint(1, 1000000000)
-    if seed == 0:
+    if seed == 0 or seed.isspace():
         seed = rand_seed
 
     ######### IMAGE #########
     # Create one layer from all visible layers
     new_layer = pdb.gimp_layer_new_from_visible(image,image, str(seed))
+    layer_height = new_layer.height
+    layer_width = new_layer.width
+    pixel_region = new_layer.get_pixel_rgn(0, 0, layer_width, layer_height)
     
-    # Create a temporary png file to save the image
-    fileName = 'temp_pic_for_deletion.png'
-    outputName = os.path.join(tempDirectory,fileName)
-    pdb.gimp_file_save(image,new_layer,outputName,outputName,run_mode=1)
-    
-    # Convert png image to base64
-    binary_fc = open(outputName, 'rb').read()
-    base64_utf8_str = base64.b64encode(binary_fc).decode('utf-8')
+    # Get base64 encoded image
+    base64_utf8_str = get_image_encoded(pixel_region)
 
-    ######### MASK #########
-    # Get mask from selection
-    image_mask = image.selection
-
-    # If no selection, fill mask with white
-    if pdb.gimp_selection_is_empty(image):
-        pdb.gimp_drawable_fill(image_mask, 2)
-
-    # Create new temporary mask layer
-    mask_layer = pdb.gimp_layer_new_from_drawable(image_mask, image)
-
-    # Modify the temporary png file to save the mask
-    pdb.gimp_file_save(image,mask_layer,outputName,outputName,run_mode=1)
-
-    # Convert mask to base64
-    binary_mask = open(outputName, 'rb').read()
-    base64_utf8_str_mask = base64.b64encode(binary_mask).decode('utf-8')
+    # Get base64 encoded mask
+    base64_utf8_str_mask = get_selection_mask_encoded(image, layer_height, layer_width)
 
     ######### WORKFLOW #########
     # Load workflow from file
@@ -158,7 +170,7 @@ def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps,
     lora_dict = {lora1: [strength1], lora2: [strength2], lora3: [strength3], lora4: [strength4]}
     
     # Set workflow
-    workflow = set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, ckpt_name, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, Lora_list, lora_dict)
+    workflow = set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, layer_height, layer_width, ckpt_name, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, Lora_list, lora_dict)
 
     # Connect to ComfyUI
     ws = websocket.WebSocket()
@@ -166,32 +178,28 @@ def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps,
     queue_prompt(workflow)['prompt_id']
 
     # Wait for generated image (blocking)
+    byte_data = ""
     while True:
-        png_binary = ws.recv()
+        data_receive = ws.recv()
+
+        # Check if received message is JSON
+        if is_jsonable(data_receive):
+            message_json = json.loads(data_receive)
+            if message_json["type"] == "execution_success":
+                break
+
         # Check if received message is large
-        if len(png_binary) > 5000:
-            #  Ignore first two 32 bit numbers
-            png_binary = png_binary[8:]
-            break
-
-    # Try to overwrite temp image with generated data
-    try:
-        open(outputName, 'wb').write(png_binary)
-    except OSError as e: # this would be "except OSError, e:" before Python 2.6
-        if e.errno != errno.ENOENT: # errno.ENOENT = no such file or directory
-            raise # re-raise exception if a different error occurred
-
-    # Load generated image from temporary png
-    generated_layer = pdb.gimp_file_load_layer(image, outputName)
-    pdb.gimp_layer_set_name(generated_layer, str(seed))
-    image.add_layer(generated_layer, 0)
-  
-    # Delete temporary png
-    try:
-        os.remove(outputName)
-    except OSError as e: # this would be "except OSError, e:" before Python 2.6
-        if e.errno != errno.ENOENT: # errno.ENOENT = no such file or directory
-            raise # re-raise exception if a different error occurred
+        if len(data_receive) > 10000:
+            #  Ignore first 4 values
+            byte_data = data_receive[4:]
+    
+    if byte_data == "":
+        gimp.message("No data received. \nIdentical image may have been cached.")
+    else:
+        rgba_data = base64.b64decode(byte_data)
+        pixel_region[:,:] = rgba_data
+        pdb.gimp_image_insert_layer(image, new_layer, None, 0)
+        gimp.displays_flush()
 
 register(
     "python_fu_comfy_image_to_image",             # Function Name
@@ -199,7 +207,7 @@ register(
     "Image to image generation with prompt",      # Help
     "Nicholas Chenevey",        # Author
     "Nicholas Chenevey",        # 
-    "09/04/2024",               # Date Created
+    "09/10/2024",               # Date Created
     "Image-to-image...",        # Menu label
     "",                         # Image types
     [
@@ -231,7 +239,6 @@ register(
         (PF_FLOAT, "float", "Strength4",             1.0),
 
         (PF_IMAGE,  'image',  'Input image',        None),
-        (PF_DIRNAME,    'directory',    'Temp Directory',   '.'),
     ],
     [],
     image_to_image, menu="<Image>/Comfy Tools")

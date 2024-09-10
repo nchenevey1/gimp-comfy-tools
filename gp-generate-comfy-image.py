@@ -9,6 +9,7 @@ import json
 import urllib2
 import io
 import random
+import base64
 import os
 from collections import namedtuple
 
@@ -30,12 +31,6 @@ def set_workflow(workflow, image_width, image_height, ckpt_name, posprompt, negp
             # Find default checkpoint node
             if workflow[node]["class_type"] == "CheckPointLoaderSimple":
                 workflow[node]["inputs"]["ckpt_name"] = ckpt_name
-
-            # Find default LoraLoader node
-            # if workflow[node]["class_type"] == "LoraLoader":
-            #     workflow[node]["inputs"]["lora_name"] = Lora_list.pop(0)
-            #     workflow[node]["inputs"]["strength_model"] = lora_dict[workflow[node]["inputs"]["lora_name"]][0]
-            #     workflow[node]["inputs"]["strength_clip"] = lora_dict[workflow[node]["inputs"]["lora_name"]][1]
             
             # Find Lora Loader Stack (rgthree) node
             if workflow[node]["class_type"] == "Lora Loader Stack (rgthree)":
@@ -79,6 +74,13 @@ def createOptions(name,pairs): # by Ofnuts on gimp-forum.net
                     ))
     return opts
 
+def is_jsonable(x):
+    try:
+        json.loads(x)
+        return True
+    except (TypeError, OverflowError, ValueError):
+        return False
+
 
 SamplerOptions = createOptions("Sampler", [("euler","euler"), ("euler_cfg_pp","euler_cfg_pp"), ("euler_ancestral","euler_ancestral"), ("euler_ancestral_cfg_pp","euler_ancestral_cfg_pp"), 
          ("heun","heun"), ("heunpp2","heunpp2"), ("dpm_2","dpm_2"), ("dpm_2_ancestral","dpm_2_ancestral"), ("lsm","lsm"), ("dpm_fast","dpm_fast"), ("dpm_adaptive","dpm_adaptive"), 
@@ -95,24 +97,16 @@ client_id = str(uuid.uuid4())
 
 ############################################################################################################
 #### MAIN FUNCTION ####
-def generate_image(image_width, image_height, workflow_path, checkpoint, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4, tempDirectory) :
+def generate_image(image_width, image_height, workflow_path, checkpoint, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4) :
 
+    if workflow_path.isspace() or checkpoint.isspace():
+        gimp.message("Please fill workflow and checkpoint fields.")
+        return
+    
     # Set to random seed if seed is 0
     rand_seed = random.randint(1, 1000000000)
-    if seed == 0:
+    if seed == 0 or seed.isspace():
         seed = rand_seed
-
-    ######### IMAGE #########
-    # Create an image and add a layer
-    image = pdb.gimp_image_new(image_width, image_height, RGB_IMAGE)
-    new_layer = pdb.gimp_layer_new(image, image_width, image_height, RGB_IMAGE, str(seed), 100, NORMAL_MODE)
-    image.add_layer(new_layer, 0)
-
-    # Create a temporary file to save the image
-    fileName = 'temp_pic_for_deletion.png'
-    outputName = os.path.join(tempDirectory,fileName)
-    pdb.gimp_file_save(image,new_layer,outputName,outputName,run_mode=[RUN_WITH_LAST_VALS,RUN_INTERACTIVE][0])
-    pdb.gimp_image_remove_layer(image, new_layer)
 
     ######### WORKFLOW #########
     # Load workflow from file
@@ -143,32 +137,34 @@ def generate_image(image_width, image_height, workflow_path, checkpoint, posprom
     queue_prompt(workflow)['prompt_id']
 
     # Wait for generated image (blocking)
+    byte_data = ""
     while True:
-        png_binary = ws.recv()
+        data_receive = ws.recv()
+
+        # Check if received message is JSON
+        if is_jsonable(data_receive):
+            message_json = json.loads(data_receive)
+            if message_json["type"] == "execution_success":
+                break
+
         # Check if received message is large
-        if len(png_binary) > 5000:
-            # Ignore first two 32 bit numbers
-            png_binary = png_binary[8:]
-            break
+        if len(data_receive) > 10000:
+            #  Ignore first 4 values
+            byte_data = data_receive[4:]
+    
+    # Create new image and add empty layer
+    image = pdb.gimp_image_new(image_width, image_height, 0)
+    new_layer = pdb.gimp_layer_new(image, image_width, image_height, 0, str(seed), 100, 28)
+    new_layer.add_alpha()
+    pdb.gimp_image_insert_layer(image, new_layer, None, 0)
+    pixel_region = new_layer.get_pixel_rgn(0, 0, new_layer.width, new_layer.height)
 
-    # Try to overwrite temp image with generated data
-    try:
-        open(outputName, 'wb').write(png_binary)
-    except OSError as e: # this would be "except OSError, e:" before Python 2.6
-        if e.errno != errno.ENOENT: # errno.ENOENT = no such file or directory
-            raise # re-raise exception if a different error occurred
-
-    # Add generated image layer
-    generated_layer = pdb.gimp_file_load_layer(image, outputName)
-    pdb.gimp_layer_set_name(generated_layer, str(seed))
-    image.add_layer(generated_layer, 0)
-
-    # Delete temporary png
-    try:
-        os.remove(outputName)
-    except OSError as e: # this would be "except OSError, e:" before Python 2.6
-        if e.errno != errno.ENOENT: # errno.ENOENT = no such file or directory
-            raise # re-raise exception if a different error occurred
+    # Load image data
+    if byte_data == "":
+        gimp.message("No data received. \nIdentical image may have been cached.")
+    else:
+        rgba_data = base64.b64decode(byte_data)
+        pixel_region[:,:] = rgba_data
 
     # Create a new image window
     gimp.Display(image)
@@ -181,7 +177,7 @@ register(
     "Image generation with prompt",         # help
     "Nicholas Chenevey",        # Author
     "Nicholas Chenevey",        # 
-    "09/04/2024",               # Date Created
+    "09/10/2024",               # Date Created
     "Generate-image...",        # Menu label
     "",                         # Image types
     [
@@ -214,8 +210,6 @@ register(
 
         (PF_FILE, "file", "Lora4",       None),
         (PF_FLOAT, "float", "Strength4",             1.0),
-
-        (PF_DIRNAME,    'directory',    'Temp Directory',   '.'),
     ],
     [],
     generate_image, menu="<Image>/Comfy Tools")
