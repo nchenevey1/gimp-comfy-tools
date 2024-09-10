@@ -5,7 +5,8 @@ GIMP plugins that communicate with ComfyUI.
 * <a href="#plugins">GIMP Plugins Basic Instructions</a>
 * <a href="#websocket">GIMP and Websocket
 * <a href="#YOLO">Yolo Instructions
-* <a href="#info">General Information</a>
+* <a href="#info">General Information
+* <a href="#demo">Demonstration</a>
 
 ## <a id="plugins" href="#toc">GIMP Plugins Basic Instructions</a>
 * Go to Edit>Preferences
@@ -54,3 +55,6 @@ Thank you to ControlAltAI
 * Seed is random if set to 0
 
 * Make sure to select the current GIMP image in the "input image" ui option when using image to image
+
+## <a id="demo" href="#toc">Demonstration</a>
+https://github.com/nchenevey1/gimp-comfy-tools/raw/main/assets/gimp_demo_01.mp4
