@@ -29,7 +29,7 @@ GIMP plugins that communicate with ComfyUI.
 `.\python.exe -m pip install websocket-client`
 
 ## <a id="info" href="#toc">General Information</a>
-* Must have https://github.com/Acly/comfyui-tooling-nodes for sending and receiving websocket png data
+* Must have https://github.com/nchenevey1/comfyui-gimp-nodes for sending and receiving websocket png data
 
 * Currently uses specific nodes
   - (Default EmptyLatentImage node, CheckPointLoderSimple node, CLIPTextEncode node, and KSampler node)
