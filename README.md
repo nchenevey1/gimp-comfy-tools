@@ -31,10 +31,6 @@ GIMP plugins that communicate with ComfyUI.
 ## <a id="info" href="#toc">General Information</a>
 * Must have https://github.com/Acly/comfyui-tooling-nodes for sending and receiving websocket png data
 
-* Uses a temporary png file saved in specified directory
-  - This is because the comfyui-tooling-nodes "Load Mask (Base64)", "Load Image (Base64)", and "Send Image (WebSocket)"
-all use Base64 encoded binary data from PNG
-
 * Currently uses specific nodes
   - (Default EmptyLatentImage node, CheckPointLoderSimple node, CLIPTextEncode node, and KSampler node)
 
@@ -50,4 +46,3 @@ all use Base64 encoded binary data from PNG
 * Seed is random if set to 0
 
 * Make sure to select the current GIMP image in the "input image" ui option when using image to image
-  - (Saving pngs causes spam in image selection options)
