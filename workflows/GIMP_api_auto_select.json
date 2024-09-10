@@ -1,7 +1,7 @@
 {
   "2": {
     "inputs": {
-      "categories": "boat",
+      "categories": "girl, dress,",
       "confidence_threshold": 0.1,
       "iou_threshold": 0.1,
       "box_thickness": 2,
@@ -22,7 +22,7 @@
         0
       ],
       "image": [
-        "9",
+        "11",
         0
       ]
     },
@@ -85,25 +85,27 @@
       "title": "Preview Image"
     }
   },
-  "9": {
+  "11": {
     "inputs": {
-      "image": ""
+      "image": "",
+      "width": 512,
+      "height": 512
     },
-    "class_type": "ETN_LoadImageBase64",
+    "class_type": "NC_LoadImageGIMP",
     "_meta": {
-      "title": "Load Image (Base64)"
+      "title": "Load Image (GIMP)"
     }
   },
-  "10": {
+  "12": {
     "inputs": {
       "images": [
         "6",
         0
       ]
     },
-    "class_type": "ETN_SendImageWebSocket",
+    "class_type": "NC_SendImageWebSocketGIMP",
     "_meta": {
-      "title": "Send Image (WebSocket)"
+      "title": "Send Image GIMP (WebSocket)"
     }
   }
 }

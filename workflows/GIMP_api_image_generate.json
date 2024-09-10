@@ -2,10 +2,10 @@
   "3": {
     "inputs": {
       "seed": 999167239339497,
-      "steps": 20,
-      "cfg": 8,
-      "sampler_name": "euler",
-      "scheduler": "normal",
+      "steps": 8,
+      "cfg": 2.1,
+      "sampler_name": "lcm",
+      "scheduler": "sgm_uniform",
       "denoise": 1,
       "model": [
         "15",
@@ -31,7 +31,7 @@
   },
   "4": {
     "inputs": {
-      "ckpt_name": "dreamshaper_8.safetensors"
+      "ckpt_name": "1.5_dreamshaper_8.safetensors"
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
@@ -104,18 +104,6 @@
       "title": "Save Image"
     }
   },
-  "13": {
-    "inputs": {
-      "images": [
-        "8",
-        0
-      ]
-    },
-    "class_type": "ETN_SendImageWebSocket",
-    "_meta": {
-      "title": "Send Image (WebSocket)"
-    }
-  },
   "14": {
     "inputs": {
       "lora_01": "None",
@@ -162,6 +150,18 @@
     "class_type": "Lora Loader Stack (rgthree)",
     "_meta": {
       "title": "Lora Loader Stack (rgthree)"
+    }
+  },
+  "16": {
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "NC_SendImageWebSocketGIMP",
+    "_meta": {
+      "title": "Send Image GIMP (WebSocket)"
     }
   }
 }
