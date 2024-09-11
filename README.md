@@ -57,4 +57,4 @@ Thank you to ControlAltAI
 * Make sure to select the current GIMP image in the "input image" ui option when using image to image
 
 ## <a id="demo" href="#toc">Demonstration</a>
-[![Watch the video](https://raw.githubusercontent.com/nchenevey1/gimp-comfy-tools/main/assets/gimp_demo_01_thumbnail.JPG)](https://raw.githubusercontent.com/nchenevey1/gimp-comfy-tools/main/assets/gimp_demo_01.mp4)
+https://raw.githubusercontent.com/nchenevey1/gimp-comfy-tools/main/assets/gimp_demo_01.mp4
