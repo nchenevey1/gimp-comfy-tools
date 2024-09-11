@@ -203,10 +203,10 @@ register(
         (PF_FLOAT, "float", "Strength1",             1.0),
 
         (PF_FILE, "file", "Lora2",       None),
-        (PF_FLOAT, "float", "Strength22",             1.0),
+        (PF_FLOAT, "float", "Strength2",             1.0),
 
         (PF_FILE, "file", "Lora3",       None),
-        (PF_FLOAT, "float", "Strength33",             1.0),
+        (PF_FLOAT, "float", "Strength3",             1.0),
 
         (PF_FILE, "file", "Lora4",       None),
         (PF_FLOAT, "float", "Strength4",             1.0),

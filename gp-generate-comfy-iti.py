@@ -127,7 +127,7 @@ client_id = str(uuid.uuid4())
 #### MAIN FUNCTION ####
 def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4, image) :
 
-    if workflow_path.isspace() or checkpoint.isspace() or steps.isspace() or sampler.isspace() or scheduler.isspace() or denoise.isspace():
+    if workflow_path.isspace() or checkpoint.isspace():
         gimp.message("Please fill in all fields.")
         return
 
