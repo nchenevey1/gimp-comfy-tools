@@ -14,55 +14,193 @@ import os
 from collections import namedtuple
 
 ############################################################################################################
-# ComfyUI functions
-def queue_prompt(prompt):
-    p = {"prompt": prompt, "client_id": client_id}
-    data = json.dumps(p).encode('utf-8')
-    req =  urllib2.Request("http://{}/prompt".format(server_address), data=data)
-    return json.loads(urllib2.urlopen(req).read())
+# ComfyUI Workflow
+def set_workflow(workflow, image_width, image_height, ckpt_name, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, Lora_list, lora_dict):
+    for node in workflow.values():
+        class_type = node.get("class_type")
+        inputs = node.get("inputs", {})
+        meta = node.get("_meta", {})
 
-def set_workflow(workflow, image_width, image_height, ckpt_name, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, Lora_list, lora_dict):
-    for node in workflow:
-            # Find default EmptyLatentImage node
-            if workflow[node]["class_type"] == "EmptyLatentImage":
-                workflow[node]["inputs"]["width"] = image_width
-                workflow[node]["inputs"]["height"] = image_height
+        if class_type == "EmptyLatentImage":
+            inputs.update({"width": image_width, "height": image_height})
 
-            # Find default checkpoint node
-            if workflow[node]["class_type"] == "CheckPointLoaderSimple":
-                workflow[node]["inputs"]["ckpt_name"] = ckpt_name
-            
-            # Find Lora Loader Stack (rgthree) node
-            if workflow[node]["class_type"] == "Lora Loader Stack (rgthree)":
-                for input_value in workflow[node]["inputs"]:
-                    if Lora_list == []:
-                            break
-                    if 'lora' in input_value:
-                        lora_name = Lora_list.pop(0)
-                        if lora_name == '':
-                            pass
-                        else:
-                            workflow[node]["inputs"][input_value] = lora_name
-                            workflow[node]["inputs"][input_value.replace('lora', 'strength')] = lora_dict[workflow[node]["inputs"][input_value]][0]
+        elif class_type == "CheckPointLoaderSimple":
+            inputs["ckpt_name"] = ckpt_name
 
-            # Find default CLIPTextEncode node, titles must contain 'pos' or 'neg'
-            if workflow[node]["class_type"] == "CLIPTextEncode":
-                if 'pos' in workflow[node]["_meta"]["title"].lower():
-                    workflow[node]["inputs"]["text"] = posprompt
-                if 'neg' in workflow[node]["_meta"]["title"].lower():
-                    workflow[node]["inputs"]["text"] = negprompt
+        elif class_type == "Lora Loader Stack (rgthree)":
+            for input_key in inputs:
+                if not Lora_list:
+                    break
+                if 'lora' in input_key:
+                    lora_name = Lora_list.pop(0)
+                    if lora_name:
+                        inputs[input_key] = lora_name
+                        strength_key = input_key.replace('lora', 'strength')
+                        inputs[strength_key] = lora_dict[lora_name][0]
 
-            # Find default KSampler node
-            if workflow[node]["class_type"] == "KSampler":
-                workflow[node]["inputs"]["seed"] = seed
-                workflow[node]["inputs"]["steps"] = steps
-                workflow[node]["inputs"]["sampler_name"] = sampler
-                workflow[node]["inputs"]["scheduler"] = scheduler
-                workflow[node]["inputs"]["denoise"] = denoise
+        elif class_type == "CLIPTextEncode":
+            title = meta.get("title", "").lower()
+            if 'pos' in title:
+                inputs["text"] = posprompt
+            elif 'neg' in title:
+                inputs["text"] = negprompt
+
+        elif class_type == "KSampler":
+            inputs.update({
+                "seed": seed,
+                "steps": steps,
+                "cfg": CFG,
+                "sampler_name": sampler,
+                "scheduler": scheduler,
+                "denoise": denoise
+            })
+
     return workflow
 
 ############################################################################################################
-# GIMP functions
+# Functions
+def byte_data_to_image(byte_data, width_value, height_value, name="New Layer"):
+    """
+    Args:
+        byte_data (str): The base64 encoded RGBA byte data of the image.
+        width_value (int): The width of the image.
+        height_value (int): The height of the image.
+
+    Returns:
+        tuple: A tuple containing the created GIMP image and the new layer, or (None, None) if an error occurs.
+    """
+    if byte_data == "":
+        gimp.message("No data received. \nIdentical image may have been cached.")
+        return None
+    else:
+        rgba_data = base64.b64decode(byte_data)
+        image = pdb.gimp_image_new(width_value, height_value, 0)
+        new_layer = insert_new_layer_with_alpha(image, width_value, height_value, name)
+        pixel_region = new_layer.get_pixel_rgn(0, 0, new_layer.width, new_layer.height)
+        try:
+            pixel_region[:,:] = rgba_data
+        except:
+            gimp.message("Size mismatch. \nConsider using 'Send Image with Dimensions GIMP' node.")
+            gimp.pdb.gimp_image_delete(image)
+            return None, None
+    return image, new_layer
+
+def handle_received_data(data_receive):
+    """
+    Handles the received data and processes it based on its type.
+
+    Parameters:
+    data_receive (str): The data received, which can be either a JSON string or binary data.
+
+    Returns:
+    tuple: A tuple containing:
+        - str: The type of the processed data ("success", "error", or "image").
+        - str: A message or the image data.
+        - int or None: The width of the image if applicable, otherwise None.
+        - int or None: The height of the image if applicable, otherwise None.
+    """
+
+    if is_jsonable(data_receive):
+        message_json = json.loads(data_receive)
+        if message_json["type"] == "execution_success":
+            return "success", "Execution success received", None, None
+        elif "exception_message" in message_json["data"]:
+            error_message = ("Error: " + message_json["data"]["exception_message"])
+            return "error", error_message, None, None
+    else:
+        int_value = (ord(data_receive[0]) << 24) + (ord(data_receive[1]) << 16) + (ord(data_receive[2]) << 8) + ord(data_receive[3])
+        # Check if received message starts with 14 (image with dimensions) or 12 (just image)
+        if int_value == 14:
+            width_value = (ord(data_receive[4]) << 24) + (ord(data_receive[5]) << 16) + (ord(data_receive[6]) << 8) + ord(data_receive[7])
+            height_value = (ord(data_receive[8]) << 24) + (ord(data_receive[9]) << 16) + (ord(data_receive[10]) << 8) + ord(data_receive[11])
+            if width_value == 0 or height_value == 0:
+                return "error", "Width or Height is 0", None, None
+            image_data = data_receive[12:]
+            return "image", image_data, width_value, height_value
+        elif int_value == 12:
+            image_data = data_receive[4:]
+            return "image", image_data, None, None
+        else:
+            gimp.message("Received data is not JSON or expected image data.\nReceived start value is {}".format(str(int_value)))
+    return None, "", None, None
+
+def insert_new_layer_with_alpha(image, width, height, name="New Layer"):
+    """
+    Args:
+        image (gimp.Image): The image to which the new layer will be added.
+        width (int): The width of the new layer.
+        height (int): The height of the new layer.
+
+    Returns:
+        gimp.Layer: The newly created layer with an alpha channel.
+    """
+
+    new_layer = pdb.gimp_layer_new(image, width, height, 0, name, 100, 28)
+    new_layer.add_alpha()
+    pdb.gimp_image_insert_layer(image, new_layer, None, 0)
+    return new_layer
+
+def is_jsonable(x):
+    try:
+        json.loads(x)
+        return True
+    except (TypeError, OverflowError, ValueError):
+        return False
+
+def queue_prompt(prompt, server_address, client_id):
+    p = {"prompt": prompt, "client_id": client_id}
+    data = json.dumps(p).encode('utf-8')
+    req = urllib2.Request("http://{}/prompt".format(server_address), data=data)
+    return json.loads(urllib2.urlopen(req).read())
+
+def queue_to_comfy(workflow, server_address, client_id):
+    """
+    Establishes a WebSocket connection to a server and queues a prompt.
+
+    Args:
+        workflow (str): The workflow to be queued.
+        server_address (str): The address of the server to connect to.
+        client_id (str): The client ID to use for the connection.
+
+    Returns:
+        websocket.WebSocket: The WebSocket connection object.
+    """
+
+    ws = websocket.WebSocket()
+    ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
+    queue_prompt(workflow, server_address, client_id)['prompt_id']
+    return ws
+
+def receive_image_from_comfy(ws):
+    """
+    This function continuously listens for data from the provided WebSocket
+    connection until it successfully receives image data or encounters an error.
+
+    Args:
+        ws: The WebSocket connection object to receive data from.
+
+    Returns:
+        tuple: A tuple containing the status, received data, width, and height.
+            - status (str): The status of the received data, which can be "success", "error", or "image".
+            - received_data: The image data or message received from the WebSocket.
+            - width_value (int): The width of the received image, or None.
+            - height_value (int): The height of the received image, or None.
+    """
+
+    received_data, width_value, height_value = None, None, None
+    while True:
+        data_receive = ws.recv()
+        status, temp_data, temp_width, temp_height = handle_received_data(data_receive)
+        if status == "success":
+            break
+        elif status == "image":
+            received_data, width_value, height_value = temp_data, temp_width, temp_height
+        elif status == "error":
+            return status, temp_data, temp_width, temp_height
+    return status, received_data, width_value, height_value
+
+############################################################################################################
+# Create Sampler and Scheduler options
 def createOptions(name,pairs): # by Ofnuts on gimp-forum.net
     # namedtuple('FooType',['OPTION1',...,'OPTIONn','labels','labelTuples']
     optsclass=namedtuple(name+'Type',[symbol for symbol,label in pairs]+['labels','labelTuples'])
@@ -73,15 +211,6 @@ def createOptions(name,pairs): # by Ofnuts on gimp-forum.net
                     +[[(label,i) for i,(symbol,label) in enumerate(pairs)]]
                     ))
     return opts
-
-def is_jsonable(x):
-    try:
-        json.loads(x)
-        return True
-    except (TypeError, OverflowError, ValueError):
-        return False
-
-
 SamplerOptions = createOptions("Sampler", [("euler","euler"), ("euler_cfg_pp","euler_cfg_pp"), ("euler_ancestral","euler_ancestral"), ("euler_ancestral_cfg_pp","euler_ancestral_cfg_pp"), 
          ("heun","heun"), ("heunpp2","heunpp2"), ("dpm_2","dpm_2"), ("dpm_2_ancestral","dpm_2_ancestral"), ("lsm","lsm"), ("dpm_fast","dpm_fast"), ("dpm_adaptive","dpm_adaptive"), 
          ("dpmpp_2s_ancestral","dpmpp_2s_ancestral"), ("dpmpp_sde","dpmpp_sde"), ("dpmpp_sde_gpu","dpmpp_sde_gpu"), ("dpmpp_2m","dpmpp_2m"), ("dpmpp_2m_sde","dpmpp_2m_sde"), 
@@ -91,22 +220,18 @@ SamplerOptions = createOptions("Sampler", [("euler","euler"), ("euler_cfg_pp","e
 SchedulerOptions = createOptions("Scheduler", [("normal", "normal"), ("karras", "karras"), ("exponential", "exponential"), ("sgm_uniform", "sgm_uniform"), ("simple", "simple"), 
                                                ("ddim_uniform", "ddim_uniform"), ("beta", "beta")])
 
-# Define the server and client
-server_address = "127.0.0.1:8188"
-client_id = str(uuid.uuid4())
-
 ############################################################################################################
-#### MAIN FUNCTION ####
-def generate_image(image_width, image_height, workflow_path, checkpoint, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4) :
-
-    if workflow_path.isspace() or checkpoint.isspace():
-        gimp.message("Please fill workflow and checkpoint fields.")
-        return
+                                        #### MAIN FUNCTION ####
+############################################################################################################
+def generate_image(image_width, image_height, workflow_path, checkpoint, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4) :
     
-    # Set to random seed if seed is 0
-    rand_seed = random.randint(1, 1000000000)
-    if seed == 0 or seed.isspace():
-        seed = rand_seed
+    # Define the server and client
+    server_address = "127.0.0.1:8188"
+    client_id = str(uuid.uuid4())
+
+    # Use a random seed if the provided seed is 0 or empty
+    if not seed:
+        seed = random.randint(1, 1000000000)
 
     ######### WORKFLOW #########
     # Load workflow from file
@@ -119,53 +244,37 @@ def generate_image(image_width, image_height, workflow_path, checkpoint, posprom
     scheduler = SchedulerOptions.labelTuples[scheduler][0]
     ckpt_name = os.path.basename(checkpoint)
 
-    # Get Lora names
-    lora1 = os.path.basename(lora1)
-    lora2 = os.path.basename(lora2)
-    lora3 = os.path.basename(lora3)
-    lora4 = os.path.basename(lora4)
-    Lora_list = [lora1, lora2, lora3, lora4]
-    # lora_dict = {lora1: [strength1, clip1], lora2: [strength2, clip2], lora3: [strength3, clip3], lora4: [strength4, clip4]}
-    lora_dict = {lora1: [strength1], lora2: [strength2], lora3: [strength3], lora4: [strength4]}
+    # Prepare Lora names and strengths
+    lora_files = [lora1, lora2, lora3, lora4]
+    lora_strengths = [strength1, strength2, strength3, strength4]
+
+    # Extract base names from Lora file paths
+    Lora_list = [os.path.basename(lora) for lora in lora_files]
+
+    # Create a dictionary mapping Lora names to their strengths
+    lora_dict = {lora: [strength] for lora, strength in zip(Lora_list, lora_strengths)}
 
     # Set workflow
-    workflow = set_workflow(workflow, image_width, image_height, ckpt_name, posprompt, negprompt, seed, steps, sampler, scheduler, denoise, Lora_list, lora_dict)
+    workflow = set_workflow(workflow, image_width, image_height, ckpt_name, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, Lora_list, lora_dict)
 
     ######### Connect to ComfyUI #########
-    ws = websocket.WebSocket()
-    ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
-    queue_prompt(workflow)['prompt_id']
+    ws = queue_to_comfy(workflow, server_address, client_id)
 
     # Wait for generated image (blocking)
-    byte_data = ""
-    while True:
-        data_receive = ws.recv()
+    status, received_data, received_width, received_height = receive_image_from_comfy(ws)
 
-        # Check if received message is JSON
-        if is_jsonable(data_receive):
-            message_json = json.loads(data_receive)
-            if message_json["type"] == "execution_success":
-                break
-
-        # Check if received message is large
-        if len(data_receive) > 10000:
-            #  Ignore first 4 values
-            byte_data = data_receive[4:]
+    # Check if received data is an error
+    if status != "success":
+        gimp.message("Error:\n" + received_data)
+        return
     
-    # Create new image and add empty layer
-    image = pdb.gimp_image_new(image_width, image_height, 0)
-    new_layer = pdb.gimp_layer_new(image, image_width, image_height, 0, str(seed), 100, 28)
-    new_layer.add_alpha()
-    pdb.gimp_image_insert_layer(image, new_layer, None, 0)
-    pixel_region = new_layer.get_pixel_rgn(0, 0, new_layer.width, new_layer.height)
-
-    # Load image data
-    if byte_data == "":
-        gimp.message("No data received. \nIdentical image may have been cached.")
-    else:
-        rgba_data = base64.b64decode(byte_data)
-        pixel_region[:,:] = rgba_data
-
+    # Check if received image dimensions are provided
+    elif received_width == None or received_height == None:
+        received_width = image_width
+        received_height = image_height
+    
+    # Create new image and add received image as layer
+    image, image_layer = byte_data_to_image(received_data, received_width, received_height, str(seed))
     # Create a new image window
     gimp.Display(image)
     # Show the new image window
@@ -177,7 +286,7 @@ register(
     "Image generation with prompt",         # help
     "Nicholas Chenevey",        # Author
     "Nicholas Chenevey",        # 
-    "09/10/2024",               # Date Created
+    "10/07/2024",               # Date Created
     "Generate-image...",        # Menu label
     "",                         # Image types
     [
@@ -193,6 +302,7 @@ register(
 
         (PF_INT, "int", "Seed",                     0),
         (PF_INT, "int", "Steps",                    20),
+        (PF_FLOAT, "float", "CFG",                  7.0),
 
         (PF_OPTION, "option_var", "Sampler", 14, SamplerOptions.labels, SamplerOptions.labels),
         (PF_OPTION, "option_var", "Scheduler", 1, SchedulerOptions.labels, SchedulerOptions.labels),

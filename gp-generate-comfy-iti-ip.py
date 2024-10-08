@@ -15,16 +15,45 @@ from collections import namedtuple
 
 ############################################################################################################
 # ComfyUI Workflow
-def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, height, width, ckpt_name, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, Lora_list, lora_dict):
+def set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel, CLIPmodel, Lora_list, lora_dict, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise):
     for node in workflow.values():
         class_type = node.get("class_type")
         inputs = node.get("inputs", {})
         meta = node.get("_meta", {})
-
+        
+        # Find default checkpoint node
         if class_type == "CheckPointLoaderSimple":
             inputs["ckpt_name"] = ckpt_name
 
-        elif class_type == "Lora Loader Stack (rgthree)":
+        if class_type == "IPAdapterModelLoader":
+            inputs["ipadapter_file"] = IPAmodel
+
+        if class_type == "CLIPVisionLoader":
+            inputs["clip_name"] = CLIPmodel
+        
+        # Find default CLIPTextEncode node
+        if class_type == "CLIPTextEncode":
+            if 'pos' in meta.get("title", "").lower():
+                inputs["text"] = posprompt
+            if 'neg' in meta.get("title", "").lower():
+                inputs["text"] = negprompt
+
+        # Find EmptyLatentImage node
+        if class_type == "EmptyLatentImage":
+            inputs["width"] = mask_dict["width"]
+            inputs["height"] = mask_dict["height"]
+
+        # Find default KSampler node
+        if class_type == "KSampler":
+            inputs["seed"] = seed
+            inputs["steps"] = steps
+            inputs["cfg"] = CFG
+            inputs["sampler_name"] = sampler
+            inputs["scheduler"] = scheduler
+            inputs["denoise"] = denoise
+
+        # Find Lora Loader Stack (rgthree) node
+        if class_type == "Lora Loader Stack (rgthree)":
             for input_key in inputs:
                 if not Lora_list:
                     break
@@ -32,92 +61,83 @@ def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, height, width,
                     lora_name = Lora_list.pop(0)
                     if lora_name:
                         inputs[input_key] = lora_name
-                        strength_key = input_key.replace('lora', 'strength')
-                        inputs[strength_key] = lora_dict[lora_name][0]
+                        inputs[input_key.replace('lora', 'strength')] = lora_dict[lora_name][0]
 
-        elif class_type == "CLIPTextEncode":
-            title = meta.get("title", "").lower()
-            if 'pos' in title:
-                inputs["text"] = posprompt
-            elif 'neg' in title:
-                inputs["text"] = negprompt
-
-        elif class_type == "KSampler":
-            inputs.update({
-                "seed": seed,
-                "steps": steps,
-                "cfg": CFG,
-                "sampler_name": sampler,
-                "scheduler": scheduler,
-                "denoise": denoise
-            })
-
-        elif class_type == "NC_LoadImageGIMP":
-            inputs["image"] = base64_utf8_str
-            inputs["height"] = height
-            inputs["width"] = width
-
-        elif class_type == "NC_LoadMaskGIMP":
-            inputs["mask"] = base64_utf8_str_mask
-            inputs["height"] = height
-            inputs["width"] = width
-
+        # Find load image nodes
+        if class_type == "NC_LoadImageGIMP":
+            if 'red' in meta.get("title", "").lower():
+                inputs["image"] = image_dict["layer_red"]["b64"]
+                inputs["height"] = image_dict["layer_red"]["height"]
+                inputs["width"] = image_dict["layer_red"]["width"]
+            if 'green' in meta.get("title", "").lower():
+                inputs["image"] = image_dict["layer_green"]["b64"]
+                inputs["height"] = image_dict["layer_green"]["height"]
+                inputs["width"] = image_dict["layer_green"]["width"]
+            if 'blue' in meta.get("title", "").lower():
+                inputs["image"] = image_dict["layer_blue"]["b64"]
+                inputs["height"] = image_dict["layer_blue"]["height"]
+                inputs["width"] = image_dict["layer_blue"]["width"]
+            
+        # Find load mask nodes
+        if class_type == "NC_LoadMaskGIMP":
+            if 'red' in meta.get("title", "").lower():
+                inputs["height"] = mask_dict["height"]
+                inputs["width"] = mask_dict["width"]
+                inputs["mask"] = mask_dict["red"]
+            if 'green' in meta.get("title", "").lower():
+                inputs["height"] = mask_dict["height"]
+                inputs["width"] = mask_dict["width"]
+                inputs["mask"] = mask_dict["green"]
+            if 'blue' in meta.get("title", "").lower():
+                inputs["height"] = mask_dict["height"]
+                inputs["width"] = mask_dict["width"]
+                inputs["mask"] = mask_dict["blue"]
     return workflow
 
 ############################################################################################################
 # Functions
-def byte_data_to_layer(image, byte_data, width_value, height_value, name="New Layer"):
+def byte_data_to_image(byte_data, width_value, height_value, name="New Layer"):
     """
     Args:
-        image (gimp.Image): The GIMP image to which the new layer will be added.
-        byte_data (str): The base64 encoded RGBA byte data for the new layer.
-        width_value (int): The width of the new layer.
-        height_value (int): The height of the new layer.
+        byte_data (str): The base64 encoded RGBA byte data of the image.
+        width_value (int): The width of the image.
+        height_value (int): The height of the image.
 
     Returns:
-        gimp.Layer: The newly created layer with the RGBA data applied, or None if an error occurs.
-
-    Raises:
-        gimp.message: Displays an error message if no data is received or if there is a size mismatch.
+        tuple: A tuple containing the created GIMP image and the new layer, or (None, None) if an error occurs.
     """
     if byte_data == "":
         gimp.message("No data received. \nIdentical image may have been cached.")
         return None
     else:
         rgba_data = base64.b64decode(byte_data)
+        image = pdb.gimp_image_new(width_value, height_value, 0)
         new_layer = insert_new_layer_with_alpha(image, width_value, height_value, name)
         pixel_region = new_layer.get_pixel_rgn(0, 0, new_layer.width, new_layer.height)
         try:
             pixel_region[:,:] = rgba_data
         except:
             gimp.message("Size mismatch. \nConsider using 'Send Image with Dimensions GIMP' node.")
+            gimp.pdb.gimp_image_delete(image)
             return None, None
-    return new_layer
+    return image, new_layer
+
+def get_color_mask_region(mask_layer, color):
+    mask_image = pdb.gimp_item_get_image(mask_layer)
+    pdb.gimp_context_set_sample_threshold(0.5)
+    pdb.gimp_image_select_color(mask_image, 0, mask_layer, color)
+    mask_region = get_selection_mask_region(mask_image, False)
+    pdb.gimp_selection_none(mask_image)
+    return mask_region
 
 def get_encoded_region(pixel_region):
     pixChars = pixel_region[:,:]
     return base64.b64encode(pixChars)
 
-def get_image_encoded(pixel_region):
-    pixChars = pixel_region[:,:]
-    base64_utf8_str = base64.b64encode(pixChars)
-    return base64_utf8_str
-
-def get_selection_mask_encoded(image, height, width):
-    # Get mask from selection
-    image_mask = image.selection
-
-    # If no selection, fill mask with white
-    if pdb.gimp_selection_is_empty(image):
-        pdb.gimp_drawable_fill(image_mask, 2)
-
-    # Create new temporary mask layer
-    mask_layer = pdb.gimp_layer_new_from_drawable(image_mask, image)
-    mask_layer.add_alpha()
-    mask_region = mask_layer.get_pixel_rgn(0, 0, width, height)
-    maskChars = mask_region[:,:]
-    base64_utf8_str_mask = base64.b64encode(maskChars)
-    return base64_utf8_str_mask
+def get_layer_region(input_layer):
+    input_layer.add_alpha()
+    pixel_region = input_layer.get_pixel_rgn(0, 0, input_layer.width, input_layer.height)
+    return pixel_region
 
 def get_selection_mask_region(image, fill_white=True):
     image_mask = image.selection
@@ -129,12 +149,6 @@ def get_selection_mask_region(image, fill_white=True):
     mask_layer.add_alpha()
     mask_region = mask_layer.get_pixel_rgn(0, 0, image.width, image.height)
     return mask_region
-
-def get_visible_region(image):
-    new_layer = pdb.gimp_layer_new_from_visible(image,image, "Visible")
-    new_layer.add_alpha()
-    pixel_region = new_layer.get_pixel_rgn(0, 0, new_layer.width, new_layer.height)
-    return pixel_region, new_layer.width, new_layer.height
 
 def handle_received_data(data_receive):
     """
@@ -270,7 +284,7 @@ SchedulerOptions = createOptions("Scheduler", [("normal", "normal"), ("karras", 
 ############################################################################################################
                                         #### MAIN FUNCTION ####
 ############################################################################################################
-def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4, confine, image) :
+def image_to_image_IP_Adapter(workflow_path, checkpoint, IPAmodel, CLIPmodel, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4, L1, L2, L3, mask_layer) :
 
     # Define the server and client
     server_address = "127.0.0.1:8188"
@@ -279,14 +293,21 @@ def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps,
     # Use a random seed if the provided seed is 0 or empty
     if not seed:
         seed = random.randint(1, 1000000000)
-    
-    # Get base64 encoded image from visible
-    pixel_region, visible_width, visible_height = get_visible_region(image)
-    base64_utf8_str = get_encoded_region(pixel_region)
 
-    # Get base64 encoded selection mask
-    mask_region = get_selection_mask_region(image)
-    base64_utf8_str_mask = get_encoded_region(mask_region)
+    gimp_red =   gimpcolor.RGB(255, 0, 0)
+    gimp_green = gimpcolor.RGB(0, 255, 0)
+    gimp_blue =  gimpcolor.RGB(0, 0, 255)   
+
+    ######### IMAGES #########
+    image_dict = {"layer_red":   {"b64": get_encoded_region(get_layer_region(L1)), "height": L1.height, "width": L1.width}, 
+                  "layer_green": {"b64": get_encoded_region(get_layer_region(L2)), "height": L2.height, "width": L2.width}, 
+                  "layer_blue":  {"b64": get_encoded_region(get_layer_region(L3)), "height": L3.height, "width": L3.width}}
+
+    mask_dict = {"red":   get_encoded_region(get_color_mask_region(mask_layer, gimp_red)), 
+                 "green": get_encoded_region(get_color_mask_region(mask_layer, gimp_green)), 
+                 "blue":  get_encoded_region(get_color_mask_region(mask_layer, gimp_blue)),
+                 "height": mask_layer.height,
+                 "width":  mask_layer.width}
 
     ######### WORKFLOW #########
     # Load workflow from file
@@ -294,10 +315,12 @@ def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps,
         workflow_data = f.read()
     workflow = json.loads(workflow_data)
 
-    # Set sampler, scheduler, checkpoint
+    # Set sampler, scheduler, checkpoint, IPA model, and CLIP model
     sampler = SamplerOptions.labelTuples[sampler][0]
     scheduler = SchedulerOptions.labelTuples[scheduler][0]
     ckpt_name = os.path.basename(checkpoint)
+    IPAmodel_name = os.path.basename(IPAmodel)
+    CLIPmodel_name = os.path.basename(CLIPmodel)
 
     # Prepare Lora names and strengths
     lora_files = [lora1, lora2, lora3, lora4]
@@ -305,9 +328,9 @@ def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps,
 
     Lora_list = [os.path.basename(lora) for lora in lora_files]
     lora_dict = {lora: [strength] for lora, strength in zip(Lora_list, lora_strengths)}
-    
+
     # Set workflow
-    workflow = set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, visible_height, visible_width, ckpt_name, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, Lora_list, lora_dict)
+    workflow = set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel_name, CLIPmodel_name, Lora_list, lora_dict, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise)
 
     ######### Connect to ComfyUI #########
     ws = queue_to_comfy(workflow, server_address, client_id)
@@ -315,67 +338,67 @@ def image_to_image(workflow_path, checkpoint, posprompt, negprompt, seed, steps,
     # Wait for generated image (blocking)
     status, received_data, received_width, received_height = receive_image_from_comfy(ws)
 
-    # Check if received data is an error
+    # Check if received data is an error (not success)
     if status != "success":
         gimp.message("Error:\n" + received_data)
         return
-    
     # Check if received image dimensions are provided
     elif received_width == None or received_height == None:
-        received_width = image.width
-        received_height = image.height
+        received_width = mask_layer.width
+        received_height = mask_layer.height
     
-    generated_layer = byte_data_to_layer(image, received_data, received_width, received_height, str(seed))
-    if confine:
-        pdb.gimp_selection_invert(image)
-        pdb.gimp_drawable_edit_clear(generated_layer)
-        pdb.gimp_selection_invert(image)
+    image, image_layer = byte_data_to_image(received_data, received_width, received_height, str(seed))
+    
+    # Create a new image window
+    gimp.Display(image)
+    # Show the new image window
     gimp.displays_flush()
 
-
 register(
-    "python_fu_comfy_image_to_image",             # Function Name
-    "Image to image generation with ComfyUI",     # Description
-    "Image to image generation with prompt",      # Help
-    "Nicholas Chenevey",                  # Author
-    "Nicholas Chenevey",                  # 
-    "10/07/2024",                         # Date Created
-    "Image-to-image...",                  # Menu label
-    "",                                   # Image types
+    "python_fu_comfy_image_to_image_IPAdapter",             # Function Name
+    "Image to image using IP Adapter",                      # Description
+    "Input mask is separated by Red, Green, and Blue",      # Help
+    "Nicholas Chenevey",                # Author
+    "Nicholas Chenevey",                # 
+    "10/07/2024",                       # Date Created
+    "ITI IP Adapter...",                # Menu label
+    "",                                 # Image types
     [
-        (PF_FILE, "file", "Workflow",       None),
-
+        (PF_FILE, "file", "Workflow",         None),
         (PF_FILE, "file", "Checkpoint",       None),
+        (PF_FILE, "file", "IPAdapter Model",  None),
+        (PF_FILE, "file", "CLIP Vision",      None),
 
-        (PF_STRING, "string", "Positive Prompt",        ''),
-        (PF_STRING, "string", "Negative Prompt",        ''),
+        (PF_STRING, "string", "Positive Prompt",     ''),
+        (PF_STRING, "string", "Negative Prompt",     ''),
 
-        (PF_INT, "int", "Seed",                         0),
-        (PF_INT, "int", "Steps",                        20),
-        (PF_FLOAT, "float", "CFG",                      7.0),
+        (PF_INT, "int", "Seed",                     0),
+        (PF_INT, "int", "Steps",                    20),
+        (PF_FLOAT, "float", "CFG",                  7.0),
 
         (PF_OPTION, "option_var", "Sampler", 14, SamplerOptions.labels, SamplerOptions.labels),
         (PF_OPTION, "option_var", "Scheduler", 1, SchedulerOptions.labels, SchedulerOptions.labels),
 
-        (PF_FLOAT, "float", "Denoise",                  1.0),
-
+        (PF_FLOAT, "float", "Denoise",              1.0),
+        
         (PF_FILE, "file", "Lora1",       None),
-        (PF_FLOAT, "float", "Strength1",                1.0),
+        (PF_FLOAT, "float", "Strength1",             1.0),
 
         (PF_FILE, "file", "Lora2",       None),
-        (PF_FLOAT, "float", "Strength2",                1.0),
+        (PF_FLOAT, "float", "Strength2",             1.0),
 
         (PF_FILE, "file", "Lora3",       None),
-        (PF_FLOAT, "float", "Strength3",                1.0),
+        (PF_FLOAT, "float", "Strength3",             1.0),
 
         (PF_FILE, "file", "Lora4",       None),
-        (PF_FLOAT, "float", "Strength4",                1.0),
+        (PF_FLOAT, "float", "Strength4",             1.0),
 
-        (PF_BOOL, "bool", "Confine to Selection",       False),
-
-        (PF_IMAGE,  'image',  'Input image',            None),
+        (PF_LAYER, 'layer', 'Input layer Red',       None),
+        (PF_LAYER, 'layer', 'Input layer Green',     None),
+        (PF_LAYER, 'layer', 'Input layer Blue',      None),
+        (PF_LAYER, 'layer', 'Mask Layer',            None)
     ],
     [],
-    image_to_image, menu="<Image>/Comfy Tools")
+    image_to_image_IP_Adapter, menu="<Image>/Comfy Tools")
 
 main()

@@ -1,36 +1,8 @@
-#!/usr/bin/env python
-
-# ComfyUI functions with GIMP
-
 from gimpfu import *
 import websocket
-import uuid
 import json
 import urllib2
-import io
 import base64
-from collections import namedtuple
-
-############################################################################################################
-# ComfyUI functions
-def set_workflow(workflow, base64_utf8_str, item, confidence, iou, height, width):
-    for node in workflow.values():
-        class_type = node.get("class_type")
-        inputs = node.get("inputs", {})
-
-        # Find load image node
-        if class_type == "NC_LoadImageGIMP":
-            inputs["image"] = base64_utf8_str
-            inputs["height"] = height
-            inputs["width"] = width
-
-        # Find yoloworld node
-        if class_type == "Yoloworld_ESAM_Zho":
-            inputs["confidence_threshold"] = confidence
-            inputs["iou_threshold"] = iou
-            inputs["categories"] = item
-
-    return workflow
 
 def byte_data_mask_to_selection(image, input_layer, received_data, select_init):
     """
@@ -70,6 +42,68 @@ def byte_data_mask_to_selection(image, input_layer, received_data, select_init):
             return
     return
 
+def byte_data_to_image(byte_data, width_value, height_value, name="New Layer"):
+    """
+    Args:
+        byte_data (str): The base64 encoded RGBA byte data of the image.
+        width_value (int): The width of the image.
+        height_value (int): The height of the image.
+
+    Returns:
+        tuple: A tuple containing the created GIMP image and the new layer, or (None, None) if an error occurs.
+    """
+    if byte_data == "":
+        gimp.message("No data received. \nIdentical image may have been cached.")
+        return None
+    else:
+        rgba_data = base64.b64decode(byte_data)
+        image = pdb.gimp_image_new(width_value, height_value, 0)
+        new_layer = insert_new_layer_with_alpha(image, width_value, height_value, name)
+        pixel_region = new_layer.get_pixel_rgn(0, 0, new_layer.width, new_layer.height)
+        try:
+            pixel_region[:,:] = rgba_data
+        except:
+            gimp.message("Size mismatch. \nConsider using 'Send Image with Dimensions GIMP' node.")
+            gimp.pdb.gimp_image_delete(image)
+            return None, None
+    return image, new_layer
+
+def byte_data_to_layer(image, byte_data, width_value, height_value, name="New Layer"):
+    """
+    Args:
+        image (gimp.Image): The GIMP image to which the new layer will be added.
+        byte_data (str): The base64 encoded RGBA byte data for the new layer.
+        width_value (int): The width of the new layer.
+        height_value (int): The height of the new layer.
+
+    Returns:
+        gimp.Layer: The newly created layer with the RGBA data applied, or None if an error occurs.
+
+    Raises:
+        gimp.message: Displays an error message if no data is received or if there is a size mismatch.
+    """
+    if byte_data == "":
+        gimp.message("No data received. \nIdentical image may have been cached.")
+        return None
+    else:
+        rgba_data = base64.b64decode(byte_data)
+        new_layer = insert_new_layer_with_alpha(image, width_value, height_value, name)
+        pixel_region = new_layer.get_pixel_rgn(0, 0, new_layer.width, new_layer.height)
+        try:
+            pixel_region[:,:] = rgba_data
+        except:
+            gimp.message("Size mismatch. \nConsider using 'Send Image with Dimensions GIMP' node.")
+            return None, None
+    return new_layer
+
+def get_color_mask_region(mask_layer, color):
+    mask_image = pdb.gimp_item_get_image(mask_layer)
+    pdb.gimp_context_set_sample_threshold(0.5)
+    pdb.gimp_image_select_color(mask_image, 0, mask_layer, color)
+    mask_region = get_selection_mask_region(mask_image)
+    pdb.gimp_selection_none(mask_image)
+    return mask_region
+
 def get_encoded_region(pixel_region):
     pixChars = pixel_region[:,:]
     return base64.b64encode(pixChars)
@@ -78,6 +112,17 @@ def get_layer_region(input_layer):
     input_layer.add_alpha()
     pixel_region = input_layer.get_pixel_rgn(0, 0, input_layer.width, input_layer.height)
     return pixel_region
+
+def get_selection_mask_region(image, fill_white=True):
+    image_mask = image.selection
+    # If no selection, fill mask with white
+    if pdb.gimp_selection_is_empty(image):
+        if fill_white:
+            pdb.gimp_drawable_fill(image_mask, 2)
+    mask_layer = pdb.gimp_layer_new_from_drawable(image_mask, image)
+    mask_layer.add_alpha()
+    mask_region = mask_layer.get_pixel_rgn(0, 0, image.width, image.height)
+    return mask_region
 
 def get_visible_region(image):
     new_layer = pdb.gimp_layer_new_from_visible(image,image, "Visible")
@@ -122,6 +167,20 @@ def handle_received_data(data_receive):
         else:
             gimp.message("Received data is not JSON or expected image data.\nReceived start value is {}".format(str(int_value)))
     return None, "", None, None
+
+def insert_new_layer_with_alpha(image, width, height, name="New Layer"):
+    """
+    Args:
+        image (gimp.Image): The image to which the new layer will be added.
+        width (int): The width of the new layer.
+        height (int): The height of the new layer.
+    Returns:
+        gimp.Layer: The newly created layer with an alpha channel.
+    """
+    new_layer = pdb.gimp_layer_new(image, width, height, 0, name, 100, 28)
+    new_layer.add_alpha()
+    pdb.gimp_image_insert_layer(image, new_layer, None, 0)
+    return new_layer
 
 def insert_visible_layer_with_alpha(image, name="Visible"):
     """
@@ -192,79 +251,32 @@ def receive_image_from_comfy(ws):
             received_data, width_value, height_value = temp_data, temp_width, temp_height
     return status, received_data, width_value, height_value
 
-############################################################################################################
-                                        #### MAIN FUNCTION ####
-############################################################################################################
-def image_to_select(workflow_path, item, confidence, iou, image) :
 
-    # Define the server and client
-    server_address = "127.0.0.1:8188"
-    client_id = str(uuid.uuid4())
 
-    # Create one layer from all visible layers
-    visible_layer = insert_visible_layer_with_alpha(image, "Convert to Selection")
-    
-    # If no selection, select entire image
-    select_init = False
-    if pdb.gimp_selection_is_empty(image):
-        pdb.gimp_selection_all(image)
-    else:
-        select_init = True
-        # Resize layer to selection
-        x0,y0 = pdb.gimp_drawable_offsets(visible_layer)
-        non_empty, x1, y1, x2, y2 = pdb.gimp_selection_bounds(image)
-        pdb.gimp_layer_resize(visible_layer,x2-x1,y2-y1,x0-x1,y0-y1)
 
-    # Get pixel region
-    pixel_region = get_layer_region(visible_layer)
-    base64_utf8_str = get_encoded_region(pixel_region)
 
-    # Load workflow from file
-    with io.open(workflow_path, "r", encoding="utf-8") as f:
-        workflow_data = f.read()
-    workflow = json.loads(workflow_data)
 
-    # Set workflow
-    workflow = set_workflow(workflow, base64_utf8_str, item, confidence, iou, visible_layer.height, visible_layer.width)
 
-    ######### Connect to ComfyUI #########
-    ws = queue_to_comfy(workflow, server_address, client_id)
 
-    # Wait for generated image (blocking)
-    status, received_data, received_width, received_height = receive_image_from_comfy(ws)
 
-    # Check if received data is an error
-    if status != "success":
-        gimp.message("Error:\n" + received_data)
-        return
-    
-    # Check if received image dimensions are provided
-    elif received_width == None or received_height == None:
-        received_width = visible_layer.width
-        received_height = visible_layer.height
 
-    byte_data_mask_to_selection(image, visible_layer, received_data, select_init)
 
-register(
-    "python_fu_comfy_auto_select",        # Function Name
-    "Auto segmentation with ComfyUI",     # Description
-    "Auto segmentation with prompt",      # Help
-    "Nicholas Chenevey",        # Author
-    "Nicholas Chenevey",        # 
-    "10/07/2024",               # Date Created
-    "Auto select...",           # Menu label
-    "",                         # Image types
-    [
-        (PF_FILE, "file", "Workflow",        None),
 
-        (PF_STRING, "string", "Item",        ''),
 
-        (PF_FLOAT, "float", "Confidence",    0.1),
-        (PF_FLOAT, "float", "IOU",           0.1),
 
-        (PF_IMAGE,  'image',  'Input image',                None),
-    ],
-    [],
-    image_to_select, menu="<Image>/Comfy Tools")
 
-main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
