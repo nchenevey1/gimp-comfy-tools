@@ -1,0 +1,353 @@
+{
+  "2": {
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus_sd15.safetensors"
+    },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {
+      "title": "IPAdapter Model Loader"
+    }
+  },
+  "3": {
+    "inputs": {
+      "clip_name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "Load CLIP Vision"
+    }
+  },
+  "4": {
+    "inputs": {
+      "interpolation": "LANCZOS",
+      "crop_position": "top",
+      "sharpening": 0,
+      "image": [
+        "37",
+        0
+      ]
+    },
+    "class_type": "PrepImageForClipVision",
+    "_meta": {
+      "title": "Prep Image For ClipVision"
+    }
+  },
+  "5": {
+    "inputs": {
+      "weight": 1,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0,
+      "end_at": 1,
+      "embeds_scaling": "V only",
+      "model": [
+        "39",
+        0
+      ],
+      "ipadapter": [
+        "2",
+        0
+      ],
+      "image": [
+        "4",
+        0
+      ],
+      "attn_mask": [
+        "32",
+        0
+      ],
+      "clip_vision": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": {
+      "title": "IPAdapter Advanced"
+    }
+  },
+  "6": {
+    "inputs": {
+      "seed": 50,
+      "steps": 30,
+      "cfg": 5,
+      "sampler_name": "ddim",
+      "scheduler": "ddim_uniform",
+      "denoise": 1,
+      "model": [
+        "30",
+        0
+      ],
+      "positive": [
+        "8",
+        0
+      ],
+      "negative": [
+        "9",
+        0
+      ],
+      "latent_image": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "7": {
+    "inputs": {
+      "ckpt_name": "1.5_dreamshaper_8.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "8": {
+    "inputs": {
+      "text": "two girl friends laughing, highly detailed, photography",
+      "clip": [
+        "39",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt) Positive"
+    }
+  },
+  "9": {
+    "inputs": {
+      "text": "blurry, malformed, video game, rendering, naked, horror, zombie, text, watermark, nsfw, nipples",
+      "clip": [
+        "39",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt) Negative"
+    }
+  },
+  "10": {
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "11": {
+    "inputs": {
+      "vae_name": "1.5_vaeFtMse840000EmaPruned_vaeFtMse840k.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "12": {
+    "inputs": {
+      "samples": [
+        "6",
+        0
+      ],
+      "vae": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "16": {
+    "inputs": {
+      "weight": 1,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0,
+      "end_at": 1,
+      "embeds_scaling": "V only",
+      "model": [
+        "5",
+        0
+      ],
+      "ipadapter": [
+        "2",
+        0
+      ],
+      "image": [
+        "36",
+        0
+      ],
+      "attn_mask": [
+        "34",
+        0
+      ],
+      "clip_vision": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": {
+      "title": "IPAdapter Advanced"
+    }
+  },
+  "30": {
+    "inputs": {
+      "weight": 1,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0,
+      "end_at": 1,
+      "embeds_scaling": "V only",
+      "model": [
+        "16",
+        0
+      ],
+      "ipadapter": [
+        "2",
+        0
+      ],
+      "image": [
+        "35",
+        0
+      ],
+      "attn_mask": [
+        "33",
+        0
+      ],
+      "clip_vision": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": {
+      "title": "IPAdapter Advanced"
+    }
+  },
+  "32": {
+    "inputs": {
+      "mask": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadMaskGIMP",
+    "_meta": {
+      "title": "Load Mask (GIMP) Red"
+    }
+  },
+  "33": {
+    "inputs": {
+      "mask": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadMaskGIMP",
+    "_meta": {
+      "title": "Load Mask (GIMP) Blue"
+    }
+  },
+  "34": {
+    "inputs": {
+      "mask": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadMaskGIMP",
+    "_meta": {
+      "title": "Load Mask (GIMP) Green"
+    }
+  },
+  "35": {
+    "inputs": {
+      "image": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadImageGIMP",
+    "_meta": {
+      "title": "Load Image (GIMP) Blue"
+    }
+  },
+  "36": {
+    "inputs": {
+      "image": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadImageGIMP",
+    "_meta": {
+      "title": "Load Image (GIMP) Green"
+    }
+  },
+  "37": {
+    "inputs": {
+      "image": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadImageGIMP",
+    "_meta": {
+      "title": "Load Image (GIMP) Red"
+    }
+  },
+  "39": {
+    "inputs": {
+      "lora_01": "None",
+      "strength_01": 1,
+      "lora_02": "None",
+      "strength_02": 1,
+      "lora_03": "None",
+      "strength_03": 1,
+      "lora_04": "None",
+      "strength_04": 1,
+      "model": [
+        "7",
+        0
+      ],
+      "clip": [
+        "7",
+        1
+      ]
+    },
+    "class_type": "Lora Loader Stack (rgthree)",
+    "_meta": {
+      "title": "Lora Loader Stack (rgthree)"
+    }
+  },
+  "40": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "41": {
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "NC_SendImageDimsWebSocketGIMP",
+    "_meta": {
+      "title": "Send Image with Dimensions GIMP (WebSocket)"
+    }
+  }
+}
