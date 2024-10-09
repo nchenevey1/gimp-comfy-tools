@@ -38,6 +38,8 @@ https://www.youtube.com/watch?v=wEd1wPlCBaQ
 Thank you to ControlAltAI
 
 ## <a id="info" href="#toc">General Information</a>
+* ComfyUI must be running with all of the required nodes for the specified workflow installed
+
 * Must have https://github.com/nchenevey1/comfyui-gimp-nodes for sending and receiving websocket RGBA data
 
 * Currently uses specific nodes
