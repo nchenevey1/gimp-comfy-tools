@@ -1,0 +1,229 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "DreamShaperXL_Lightning.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "2": {
+    "inputs": {
+      "method": "fidelity",
+      "weight": 0.75,
+      "start_at": 0,
+      "end_at": 1,
+      "model": [
+        "1",
+        0
+      ],
+      "pulid": [
+        "6",
+        0
+      ],
+      "eva_clip": [
+        "7",
+        0
+      ],
+      "face_analysis": [
+        "8",
+        0
+      ],
+      "image": [
+        "18",
+        0
+      ]
+    },
+    "class_type": "ApplyPulid",
+    "_meta": {
+      "title": "Apply PuLID"
+    }
+  },
+  "3": {
+    "inputs": {
+      "seed": 7,
+      "steps": 8,
+      "cfg": 1.8,
+      "sampler_name": "dpmpp_sde",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "4": {
+    "inputs": {
+      "text": "closeup of a woman with short brown hair, cinematic, high quality, detailed, 4k",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt) Positive"
+    }
+  },
+  "5": {
+    "inputs": {
+      "text": "blurry, glitches, distorted, malformed, ill, artifacts, low resolution, bad quality, out of focus",
+      "clip": [
+        "1",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt) Negative"
+    }
+  },
+  "6": {
+    "inputs": {
+      "pulid_file": "ip-adapter_pulid_sdxl_fp16.safetensors"
+    },
+    "class_type": "PulidModelLoader",
+    "_meta": {
+      "title": "Load PuLID Model"
+    }
+  },
+  "7": {
+    "inputs": {},
+    "class_type": "PulidEvaClipLoader",
+    "_meta": {
+      "title": "Load Eva Clip (PuLID)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "provider": "CPU"
+    },
+    "class_type": "PulidInsightFaceLoader",
+    "_meta": {
+      "title": "Load InsightFace (PuLID)"
+    }
+  },
+  "9": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "10": {
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "11": {
+    "inputs": {
+      "width": 768,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "18": {
+    "inputs": {
+      "method": "lanczos",
+      "image_1": [
+        "22",
+        0
+      ],
+      "image_2": [
+        "23",
+        0
+      ],
+      "image_3": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "ImageBatchMultiple+",
+    "_meta": {
+      "title": "🔧 Images Batch Multiple"
+    }
+  },
+  "22": {
+    "inputs": {
+      "image": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadImageGIMP",
+    "_meta": {
+      "title": "Load Image (GIMP) 1"
+    }
+  },
+  "23": {
+    "inputs": {
+      "image": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadImageGIMP",
+    "_meta": {
+      "title": "Load Image (GIMP) 2"
+    }
+  },
+  "24": {
+    "inputs": {
+      "image": "",
+      "width": 512,
+      "height": 512
+    },
+    "class_type": "NC_LoadImageGIMP",
+    "_meta": {
+      "title": "Load Image (GIMP) 3"
+    }
+  },
+  "25": {
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "NC_SendImageDimsWebSocketGIMP",
+    "_meta": {
+      "title": "Send Image with Dimensions GIMP (WebSocket)"
+    }
+  }
+}
