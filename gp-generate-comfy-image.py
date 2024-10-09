@@ -46,14 +46,12 @@ def set_workflow(workflow, image_width, image_height, ckpt_name, posprompt, negp
                 inputs["text"] = negprompt
 
         elif class_type == "KSampler":
-            inputs.update({
-                "seed": seed,
-                "steps": steps,
-                "cfg": CFG,
-                "sampler_name": sampler,
-                "scheduler": scheduler,
-                "denoise": denoise
-            })
+            inputs.update({"seed": seed,})
+            if steps>0: inputs.update({"steps": steps})
+            if CFG>0: inputs.update({"cfg": CFG})
+            if sampler != len(SamplerOptions)-1: inputs.update({"sampler_name": SamplerOptions[sampler]})
+            if scheduler != len(SchedulerOptions)-1: inputs.update({"scheduler": SchedulerOptions[scheduler]})
+            if denoise>0: inputs.update({"denoise": denoise})
 
     return workflow
 
@@ -201,24 +199,11 @@ def receive_image_from_comfy(ws):
 
 ############################################################################################################
 # Create Sampler and Scheduler options
-def createOptions(name,pairs): # by Ofnuts on gimp-forum.net
-    # namedtuple('FooType',['OPTION1',...,'OPTIONn','labels','labelTuples']
-    optsclass=namedtuple(name+'Type',[symbol for symbol,label in pairs]+['labels','labelTuples'])
-    # FooType(0,..,n-1,['Option 1',...,'Option N'],[('Option 1',0),...,('Option N',n-1)])
-    opts=optsclass(*(
-                    range(len(pairs))
-                    +[[label for symbol,label in pairs]]
-                    +[[(label,i) for i,(symbol,label) in enumerate(pairs)]]
-                    ))
-    return opts
-SamplerOptions = createOptions("Sampler", [("euler","euler"), ("euler_cfg_pp","euler_cfg_pp"), ("euler_ancestral","euler_ancestral"), ("euler_ancestral_cfg_pp","euler_ancestral_cfg_pp"), 
-         ("heun","heun"), ("heunpp2","heunpp2"), ("dpm_2","dpm_2"), ("dpm_2_ancestral","dpm_2_ancestral"), ("lsm","lsm"), ("dpm_fast","dpm_fast"), ("dpm_adaptive","dpm_adaptive"), 
-         ("dpmpp_2s_ancestral","dpmpp_2s_ancestral"), ("dpmpp_sde","dpmpp_sde"), ("dpmpp_sde_gpu","dpmpp_sde_gpu"), ("dpmpp_2m","dpmpp_2m"), ("dpmpp_2m_sde","dpmpp_2m_sde"), 
-         ("dpmpp_2m_sde_gpu","dpmpp_2m_sde_gpu"), ("dpmpp_3m_sde","dpmpp_3m_sde"), ("dpmpp_3m_sde_gpu","dpmpp_3m_sde_gpu"), ("ddpm","ddpm"), ("lcm","lcm"), ("ipndm","ipndm"), 
-         ("ipndm_v","ipndm_v"), ("deis","deis"), ("ddim","ddim"), ("uni_pc","uni_pc"), ("uni_pc_bh2","uni_pc_bh2")])
+SamplerOptions = ["euler", "euler_cfg_pp", "euler_ancestral", "euler_ancestral_cfg_pp", "heun", "heunpp2", "dpm_2", "dpm_2_ancestral", "lsm", "dpm_fast", "dpm_adaptive",
+                    "dpmpp_2s_ancestral", "dpmpp_sde", "dpmpp_sde_gpu", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu", "dpmpp_3m_sde", "dpmpp_3m_sde_gpu", "ddpm", "lcm", "ipndm", 
+                    "ipndm_v", "deis", "ddim", "uni_pc", "uni_pc_bh2", "None"]
 
-SchedulerOptions = createOptions("Scheduler", [("normal", "normal"), ("karras", "karras"), ("exponential", "exponential"), ("sgm_uniform", "sgm_uniform"), ("simple", "simple"), 
-                                               ("ddim_uniform", "ddim_uniform"), ("beta", "beta")])
+SchedulerOptions = ["normal", "karras", "exponential", "sgm_uniform", "simple", "ddim_uniform", "beta", "None"]
 
 ############################################################################################################
                                         #### MAIN FUNCTION ####
@@ -240,8 +225,6 @@ def generate_image(image_width, image_height, workflow_path, checkpoint, posprom
     workflow = json.loads(workflow_data)
 
     # Set sampler, scheduler, and checkpoint
-    sampler = SamplerOptions.labelTuples[sampler][0]
-    scheduler = SchedulerOptions.labelTuples[scheduler][0]
     ckpt_name = os.path.basename(checkpoint)
 
     # Prepare Lora names and strengths
@@ -274,7 +257,11 @@ def generate_image(image_width, image_height, workflow_path, checkpoint, posprom
         received_height = image_height
     
     # Create new image and add received image as layer
-    image, image_layer = byte_data_to_image(received_data, received_width, received_height, str(seed))
+    try:
+        image, image_layer = byte_data_to_image(received_data, received_width, received_height, str(seed))
+    except:
+        gimp.message("Error: Image creation failed. \nIdentical image may have been cached.")
+        return
     # Create a new image window
     gimp.Display(image)
     # Show the new image window
@@ -304,8 +291,8 @@ register(
         (PF_INT, "int", "Steps",                    20),
         (PF_FLOAT, "float", "CFG",                  7.0),
 
-        (PF_OPTION, "option_var", "Sampler", 14, SamplerOptions.labels, SamplerOptions.labels),
-        (PF_OPTION, "option_var", "Scheduler", 1, SchedulerOptions.labels, SchedulerOptions.labels),
+        (PF_OPTION, "option_var", "Sampler", 14, SamplerOptions),
+        (PF_OPTION, "option_var", "Scheduler", 1, SchedulerOptions),
 
         (PF_FLOAT, "float", "Denoise",              1.0),
 

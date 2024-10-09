@@ -243,7 +243,12 @@ def image_to_select(workflow_path, item, confidence, iou, image) :
         received_width = visible_layer.width
         received_height = visible_layer.height
 
-    byte_data_mask_to_selection(image, visible_layer, received_data, select_init)
+    
+    try:
+        byte_data_mask_to_selection(image, visible_layer, received_data, select_init)
+    except:
+        gimp.message("Error: Selection failed. \nIdentical process may have been cached.")
+        return
 
 register(
     "python_fu_comfy_auto_select",        # Function Name

@@ -59,4 +59,14 @@ Thank you to ControlAltAI
 * Make sure to select the current GIMP image in the "input image" ui option when using image to image
 
 ## <a id="demo" href="#toc">Demonstration</a>
+* Image to Image
 https://github.com/user-attachments/assets/1254844a-43f3-40df-9914-cb07b1fe0448
+
+* Object Erase
+https://github.com/user-attachments/assets/42957904-34af-44ff-955b-3c17483737b6
+
+* RGB IP Adapter
+https://github.com/user-attachments/assets/d235e270-8573-4b78-bfb2-46957608299b
+
+* Face IP Adapter
+https://github.com/user-attachments/assets/d7d0ac48-5587-482b-ae0e-2f1a79d082c4

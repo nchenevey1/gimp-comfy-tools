@@ -15,7 +15,7 @@ from collections import namedtuple
 
 ############################################################################################################
 # ComfyUI Workflow
-def set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel, CLIPmodel, Lora_list, lora_dict, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise):
+def set_workflow(workflow, image_dict, ckpt_name, input_height, input_width, Lora_list, lora_dict, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise):
     for node in workflow.values():
         class_type = node.get("class_type")
         inputs = node.get("inputs", {})
@@ -24,12 +24,6 @@ def set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel, CLIPmodel
         # Find default checkpoint node
         if class_type == "CheckPointLoaderSimple":
             inputs["ckpt_name"] = ckpt_name
-
-        if class_type == "IPAdapterModelLoader":
-            inputs["ipadapter_file"] = IPAmodel
-
-        if class_type == "CLIPVisionLoader":
-            inputs["clip_name"] = CLIPmodel
         
         # Find default CLIPTextEncode node
         if class_type == "CLIPTextEncode":
@@ -40,8 +34,8 @@ def set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel, CLIPmodel
 
         # Find EmptyLatentImage node
         if class_type == "EmptyLatentImage":
-            inputs["width"] = mask_dict["width"]
-            inputs["height"] = mask_dict["height"]
+            inputs["width"] = input_width
+            inputs["height"] = input_height
 
         # Find default KSampler node
         if class_type == "KSampler":
@@ -65,33 +59,18 @@ def set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel, CLIPmodel
 
         # Find load image nodes
         if class_type == "NC_LoadImageGIMP":
-            if 'red' in meta.get("title", "").lower():
-                inputs["image"] = image_dict["layer_red"]["b64"]
-                inputs["height"] = image_dict["layer_red"]["height"]
-                inputs["width"] = image_dict["layer_red"]["width"]
-            if 'green' in meta.get("title", "").lower():
-                inputs["image"] = image_dict["layer_green"]["b64"]
-                inputs["height"] = image_dict["layer_green"]["height"]
-                inputs["width"] = image_dict["layer_green"]["width"]
-            if 'blue' in meta.get("title", "").lower():
-                inputs["image"] = image_dict["layer_blue"]["b64"]
-                inputs["height"] = image_dict["layer_blue"]["height"]
-                inputs["width"] = image_dict["layer_blue"]["width"]
-            
-        # Find load mask nodes
-        if class_type == "NC_LoadMaskGIMP":
-            if 'red' in meta.get("title", "").lower():
-                inputs["height"] = mask_dict["height"]
-                inputs["width"] = mask_dict["width"]
-                inputs["mask"] = mask_dict["red"]
-            if 'green' in meta.get("title", "").lower():
-                inputs["height"] = mask_dict["height"]
-                inputs["width"] = mask_dict["width"]
-                inputs["mask"] = mask_dict["green"]
-            if 'blue' in meta.get("title", "").lower():
-                inputs["height"] = mask_dict["height"]
-                inputs["width"] = mask_dict["width"]
-                inputs["mask"] = mask_dict["blue"]
+            if '1' in meta.get("title", "").lower():
+                inputs["image"] = image_dict["layer_1"]["b64"]
+                inputs["height"] = image_dict["layer_1"]["height"]
+                inputs["width"] = image_dict["layer_1"]["width"]
+            if '2' in meta.get("title", "").lower():
+                inputs["image"] = image_dict["layer_2"]["b64"]
+                inputs["height"] = image_dict["layer_2"]["height"]
+                inputs["width"] = image_dict["layer_2"]["width"]
+            if '3' in meta.get("title", "").lower():
+                inputs["image"] = image_dict["layer_3"]["b64"]
+                inputs["height"] = image_dict["layer_3"]["height"]
+                inputs["width"] = image_dict["layer_3"]["width"]
     return workflow
 
 ############################################################################################################
@@ -271,7 +250,7 @@ SchedulerOptions = ["normal", "karras", "exponential", "sgm_uniform", "simple", 
 ############################################################################################################
                                         #### MAIN FUNCTION ####
 ############################################################################################################
-def image_to_image_IP_Adapter(workflow_path, checkpoint, IPAmodel, CLIPmodel, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4, L1, L2, L3, mask_layer) :
+def Face_Adapter(workflow_path, checkpoint, input_height, input_width, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, lora1, strength1, lora2, strength2, lora3, strength3, lora4, strength4, L1, L2, L3) :
 
     # Define the server and client
     server_address = "127.0.0.1:8188"
@@ -279,22 +258,12 @@ def image_to_image_IP_Adapter(workflow_path, checkpoint, IPAmodel, CLIPmodel, po
 
     # Use a random seed if the provided seed is 0 or empty
     if not seed:
-        seed = random.randint(1, 1000000000)
-
-    gimp_red =   gimpcolor.RGB(255, 0, 0)
-    gimp_green = gimpcolor.RGB(0, 255, 0)
-    gimp_blue =  gimpcolor.RGB(0, 0, 255)   
+        seed = random.randint(1, 1000000000) 
 
     ######### IMAGES #########
-    image_dict = {"layer_red":   {"b64": get_encoded_region(get_layer_region(L1)), "height": L1.height, "width": L1.width}, 
-                  "layer_green": {"b64": get_encoded_region(get_layer_region(L2)), "height": L2.height, "width": L2.width}, 
-                  "layer_blue":  {"b64": get_encoded_region(get_layer_region(L3)), "height": L3.height, "width": L3.width}}
-
-    mask_dict = {"red":   get_encoded_region(get_color_mask_region(mask_layer, gimp_red)), 
-                 "green": get_encoded_region(get_color_mask_region(mask_layer, gimp_green)), 
-                 "blue":  get_encoded_region(get_color_mask_region(mask_layer, gimp_blue)),
-                 "height": mask_layer.height,
-                 "width":  mask_layer.width}
+    image_dict = {"layer_1":   {"b64": get_encoded_region(get_layer_region(L1)), "height": L1.height, "width": L1.width}, 
+                  "layer_2": {"b64": get_encoded_region(get_layer_region(L2)), "height": L2.height, "width": L2.width}, 
+                  "layer_3":  {"b64": get_encoded_region(get_layer_region(L3)), "height": L3.height, "width": L3.width}}
 
     ######### WORKFLOW #########
     # Load workflow from file
@@ -304,8 +273,6 @@ def image_to_image_IP_Adapter(workflow_path, checkpoint, IPAmodel, CLIPmodel, po
 
     # Set sampler, scheduler, checkpoint, IPA model, and CLIP model
     ckpt_name = os.path.basename(checkpoint)
-    IPAmodel_name = os.path.basename(IPAmodel)
-    CLIPmodel_name = os.path.basename(CLIPmodel)
 
     # Prepare Lora names and strengths
     lora_files = [lora1, lora2, lora3, lora4]
@@ -315,7 +282,7 @@ def image_to_image_IP_Adapter(workflow_path, checkpoint, IPAmodel, CLIPmodel, po
     lora_dict = {lora: [strength] for lora, strength in zip(Lora_list, lora_strengths)}
 
     # Set workflow
-    workflow = set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel_name, CLIPmodel_name, Lora_list, lora_dict, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise)
+    workflow = set_workflow(workflow, image_dict, ckpt_name, input_height, input_width, Lora_list, lora_dict, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise)
 
     ######### Connect to ComfyUI #########
     ws = queue_to_comfy(workflow, server_address, client_id)
@@ -332,8 +299,8 @@ def image_to_image_IP_Adapter(workflow_path, checkpoint, IPAmodel, CLIPmodel, po
         return
     # Check if received image dimensions are provided
     elif received_width == None or received_height == None:
-        received_width = mask_layer.width
-        received_height = mask_layer.height
+        received_width = input_width
+        received_height = input_height
     
     try:
         image, image_layer = byte_data_to_image(received_data, received_width, received_height, str(seed))
@@ -347,19 +314,20 @@ def image_to_image_IP_Adapter(workflow_path, checkpoint, IPAmodel, CLIPmodel, po
     gimp.displays_flush()
 
 register(
-    "python_fu_comfy_image_to_image_IPAdapter",             # Function Name
-    "Image to image using IP Adapter",                      # Description
-    "Input mask is separated by Red, Green, and Blue",      # Help
+    "python_fu_comfy_face_adapter",                                 # Function Name
+    "Uses three faces to compose a new one",                        # Description
+    "Input is three layers containing different photos of the same subject",      # Help
     "Nicholas Chenevey",                # Author
     "Nicholas Chenevey",                # 
-    "10/07/2024",                       # Date Created
-    "ITI IP Adapter...",                # Menu label
+    "10/09/2024",                       # Date Created
+    "Face Adapter...",                  # Menu label
     "",                                 # Image types
     [
         (PF_FILE, "file", "Workflow",         None),
         (PF_FILE, "file", "Checkpoint",       None),
-        (PF_FILE, "file", "IPAdapter Model",  None),
-        (PF_FILE, "file", "CLIP Vision",      None),
+
+        (PF_INT, "int", "Input Height",            1024),
+        (PF_INT, "int", "Input Width",             768),
 
         (PF_STRING, "string", "Positive Prompt",     ''),
         (PF_STRING, "string", "Negative Prompt",     ''),
@@ -385,12 +353,11 @@ register(
         (PF_FILE, "file", "Lora4",       None),
         (PF_FLOAT, "float", "Strength4",             1.0),
 
-        (PF_LAYER, 'layer', 'Input layer Red',       None),
-        (PF_LAYER, 'layer', 'Input layer Green',     None),
-        (PF_LAYER, 'layer', 'Input layer Blue',      None),
-        (PF_LAYER, 'layer', 'Mask Layer',            None)
+        (PF_LAYER, 'layer', 'Input layer 1',       None),
+        (PF_LAYER, 'layer', 'Input layer 2',     None),
+        (PF_LAYER, 'layer', 'Input layer 3',      None)
     ],
     [],
-    image_to_image_IP_Adapter, menu="<Image>/Comfy Tools")
+    Face_Adapter, menu="<Image>/Comfy Tools")
 
 main()
