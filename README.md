@@ -15,11 +15,12 @@ GIMP plugins that communicate with ComfyUI.
 * Add the directory containing the plugin .py files
 
 ## <a id="websocket" href="#toc">GIMP and Websocket</a>
-* I got get-pip.py from https://bootstrap.pypa.io/pip/2.7/get-pip.py
+* Pip is required:
+  - I got get-pip.py from https://bootstrap.pypa.io/pip/2.7/get-pip.py
 
 * Add get-pip.py to GIMP folder: C:\Program Files\GIMP 2\bin 
 
-* From a Windows Command Prompt Window cd to the GIMP Python folder (type cmd into the file explorer address bar):  
+* From a Windows Command Prompt Window, cd to the GIMP Python folder (or just type cmd into the file explorer address bar):  
 `cd C:\Program Files\GIMP-2\bin`
 
 * Run the get-pip.py script using the GIMP version of Python:  
