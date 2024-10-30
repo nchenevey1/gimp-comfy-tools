@@ -11,7 +11,6 @@ import io
 import random
 import base64
 import os
-from collections import namedtuple
 
 ############################################################################################################
 # ComfyUI Workflow
@@ -46,17 +45,17 @@ def set_workflow(workflow, image_dict, ckpt_name, input_height, input_width, Lor
             if scheduler != len(SchedulerOptions)-1: inputs.update({"scheduler": SchedulerOptions[scheduler]})
             if denoise>0: inputs.update({"denoise": denoise})
 
-        # Find Lora Loader Stack (rgthree) node
-        if class_type == "Lora Loader Stack (rgthree)":
+        elif class_type == "Power Lora Loader (rgthree)":
             for input_key in inputs:
                 if not Lora_list:
                     break
                 if 'lora' in input_key:
                     lora_name = Lora_list.pop(0)
                     if lora_name:
-                        inputs[input_key] = lora_name
-                        inputs[input_key.replace('lora', 'strength')] = lora_dict[lora_name][0]
-
+                        inputs[input_key]['lora'] = lora_name
+                        inputs[input_key]['strength'] = lora_dict[lora_name][0]
+                        inputs[input_key]['on'] = True
+                        
         # Find load image nodes
         if class_type == "NC_LoadImageGIMP":
             if '1' in meta.get("title", "").lower():
