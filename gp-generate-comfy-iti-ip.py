@@ -11,7 +11,6 @@ import io
 import random
 import base64
 import os
-from collections import namedtuple
 
 ############################################################################################################
 # ComfyUI Workflow
@@ -25,26 +24,26 @@ def set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel, CLIPmodel
         if class_type == "CheckPointLoaderSimple":
             inputs["ckpt_name"] = ckpt_name
 
-        if class_type == "IPAdapterModelLoader":
+        elif class_type == "IPAdapterModelLoader":
             inputs["ipadapter_file"] = IPAmodel
 
-        if class_type == "CLIPVisionLoader":
+        elif class_type == "CLIPVisionLoader":
             inputs["clip_name"] = CLIPmodel
         
         # Find default CLIPTextEncode node
-        if class_type == "CLIPTextEncode":
+        elif class_type == "CLIPTextEncode":
             if 'pos' in meta.get("title", "").lower():
                 inputs["text"] = posprompt
             if 'neg' in meta.get("title", "").lower():
                 inputs["text"] = negprompt
 
         # Find EmptyLatentImage node
-        if class_type == "EmptyLatentImage":
+        elif class_type == "EmptyLatentImage":
             inputs["width"] = mask_dict["width"]
             inputs["height"] = mask_dict["height"]
 
         # Find default KSampler node
-        if class_type == "KSampler":
+        elif class_type == "KSampler":
             inputs.update({"seed": seed,})
             if steps>0: inputs.update({"steps": steps})
             if CFG>0: inputs.update({"cfg": CFG})
@@ -52,19 +51,19 @@ def set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel, CLIPmodel
             if scheduler != len(SchedulerOptions)-1: inputs.update({"scheduler": SchedulerOptions[scheduler]})
             if denoise>0: inputs.update({"denoise": denoise})
 
-        # Find Lora Loader Stack (rgthree) node
-        if class_type == "Lora Loader Stack (rgthree)":
+        elif class_type == "Power Lora Loader (rgthree)":
             for input_key in inputs:
                 if not Lora_list:
                     break
                 if 'lora' in input_key:
                     lora_name = Lora_list.pop(0)
                     if lora_name:
-                        inputs[input_key] = lora_name
-                        inputs[input_key.replace('lora', 'strength')] = lora_dict[lora_name][0]
-
+                        inputs[input_key]['lora'] = lora_name
+                        inputs[input_key]['strength'] = lora_dict[lora_name][0]
+                        inputs[input_key]['on'] = True
+                        
         # Find load image nodes
-        if class_type == "NC_LoadImageGIMP":
+        elif class_type == "NC_LoadImageGIMP":
             if 'red' in meta.get("title", "").lower():
                 inputs["image"] = image_dict["layer_red"]["b64"]
                 inputs["height"] = image_dict["layer_red"]["height"]
@@ -79,7 +78,7 @@ def set_workflow(workflow, mask_dict, image_dict, ckpt_name, IPAmodel, CLIPmodel
                 inputs["width"] = image_dict["layer_blue"]["width"]
             
         # Find load mask nodes
-        if class_type == "NC_LoadMaskGIMP":
+        elif class_type == "NC_LoadMaskGIMP":
             if 'red' in meta.get("title", "").lower():
                 inputs["height"] = mask_dict["height"]
                 inputs["width"] = mask_dict["width"]

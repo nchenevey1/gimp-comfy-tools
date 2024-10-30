@@ -49,7 +49,7 @@ Thank you to ControlAltAI
 * Searches for prompt text nodes by searching CLIPTextEncode nodes for 'pos' and 'neg' in title
   - (Positive prompt node must have 'pos' somewhere in title, negative prompt node must have 'neg')
 
-* Currently uses Lora Loader Stack (rgthree)
+* Currently uses Power Lora Loader (rgthree)
 
 * Lora count limited by options in GIMP ui
 

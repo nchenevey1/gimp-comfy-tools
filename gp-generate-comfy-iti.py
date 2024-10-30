@@ -11,7 +11,6 @@ import io
 import random
 import base64
 import os
-from collections import namedtuple
 
 ############################################################################################################
 # ComfyUI Workflow
@@ -24,16 +23,16 @@ def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, height, width,
         if class_type == "CheckPointLoaderSimple":
             inputs["ckpt_name"] = ckpt_name
 
-        elif class_type == "Lora Loader Stack (rgthree)":
+        elif class_type == "Power Lora Loader (rgthree)":
             for input_key in inputs:
                 if not Lora_list:
                     break
                 if 'lora' in input_key:
                     lora_name = Lora_list.pop(0)
                     if lora_name:
-                        inputs[input_key] = lora_name
-                        strength_key = input_key.replace('lora', 'strength')
-                        inputs[strength_key] = lora_dict[lora_name][0]
+                        inputs[input_key]['lora'] = lora_name
+                        inputs[input_key]['strength'] = lora_dict[lora_name][0]
+                        inputs[input_key]['on'] = True
 
         elif class_type == "CLIPTextEncode":
             title = meta.get("title", "").lower()
