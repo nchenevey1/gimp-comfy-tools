@@ -16,17 +16,17 @@ import os
 # ComfyUI Workflow
 def set_workflow(workflow, image_width, image_height, ckpt_name, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, Lora_list, lora_dict):
     for node in workflow.values():
-        class_type = node.get("class_type")
+        class_type = node.get("class_type").lower()
         inputs = node.get("inputs", {})
         meta = node.get("_meta", {})
 
-        if class_type == "EmptyLatentImage":
+        if class_type == "emptylatentimage":
             inputs.update({"width": image_width, "height": image_height})
 
-        elif class_type == "CheckPointLoaderSimple":
+        elif class_type == "checkpointloadersimple":
             inputs["ckpt_name"] = ckpt_name
 
-        elif class_type == "Power Lora Loader (rgthree)":
+        elif class_type == "power lora loader (rgthree)":
             for input_key in inputs:
                 if not Lora_list:
                     break
@@ -37,14 +37,14 @@ def set_workflow(workflow, image_width, image_height, ckpt_name, posprompt, negp
                         inputs[input_key]['strength'] = lora_dict[lora_name][0]
                         inputs[input_key]['on'] = True
 
-        elif class_type == "CLIPTextEncode":
+        elif class_type == "cliptextencode":
             title = meta.get("title", "").lower()
             if 'pos' in title:
                 inputs["text"] = posprompt
             elif 'neg' in title:
                 inputs["text"] = negprompt
 
-        elif class_type == "KSampler":
+        elif class_type == "ksampler":
             inputs.update({"seed": seed,})
             if steps>0: inputs.update({"steps": steps})
             if CFG>0: inputs.update({"cfg": CFG})

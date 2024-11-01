@@ -16,28 +16,28 @@ import os
 # ComfyUI Workflow
 def set_workflow(workflow, image_dict, ckpt_name, input_height, input_width, Lora_list, lora_dict, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise):
     for node in workflow.values():
-        class_type = node.get("class_type")
+        class_type = node.get("class_type").lower()
         inputs = node.get("inputs", {})
         meta = node.get("_meta", {})
         
         # Find default checkpoint node
-        if class_type == "CheckPointLoaderSimple":
+        if class_type == "checkpointloadersimple":
             inputs["ckpt_name"] = ckpt_name
         
         # Find default CLIPTextEncode node
-        if class_type == "CLIPTextEncode":
+        if class_type == "cliptextencode":
             if 'pos' in meta.get("title", "").lower():
                 inputs["text"] = posprompt
             if 'neg' in meta.get("title", "").lower():
                 inputs["text"] = negprompt
 
         # Find EmptyLatentImage node
-        if class_type == "EmptyLatentImage":
+        if class_type == "emptylatentimage":
             inputs["width"] = input_width
             inputs["height"] = input_height
 
         # Find default KSampler node
-        if class_type == "KSampler":
+        if class_type == "ksampler":
             inputs.update({"seed": seed,})
             if steps>0: inputs.update({"steps": steps})
             if CFG>0: inputs.update({"cfg": CFG})
@@ -45,7 +45,7 @@ def set_workflow(workflow, image_dict, ckpt_name, input_height, input_width, Lor
             if scheduler != len(SchedulerOptions)-1: inputs.update({"scheduler": SchedulerOptions[scheduler]})
             if denoise>0: inputs.update({"denoise": denoise})
 
-        elif class_type == "Power Lora Loader (rgthree)":
+        elif class_type == "power lora loader (rgthree)":
             for input_key in inputs:
                 if not Lora_list:
                     break
@@ -57,7 +57,7 @@ def set_workflow(workflow, image_dict, ckpt_name, input_height, input_width, Lor
                         inputs[input_key]['on'] = True
                         
         # Find load image nodes
-        if class_type == "NC_LoadImageGIMP":
+        if class_type == "nc_loadimagegimp":
             if '1' in meta.get("title", "").lower():
                 inputs["image"] = image_dict["layer_1"]["b64"]
                 inputs["height"] = image_dict["layer_1"]["height"]

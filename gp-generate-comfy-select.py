@@ -9,23 +9,22 @@ import json
 import urllib2
 import io
 import base64
-from collections import namedtuple
 
 ############################################################################################################
 # ComfyUI functions
 def set_workflow(workflow, base64_utf8_str, item, confidence, iou, height, width):
     for node in workflow.values():
-        class_type = node.get("class_type")
+        class_type = node.get("class_type").lower()
         inputs = node.get("inputs", {})
 
         # Find load image node
-        if class_type == "NC_LoadImageGIMP":
+        if class_type == "nc_loadimagegimp":
             inputs["image"] = base64_utf8_str
             inputs["height"] = height
             inputs["width"] = width
 
         # Find yoloworld node
-        if class_type == "Yoloworld_ESAM_Zho":
+        if class_type == "yoloworld_esam_zho":
             inputs["confidence_threshold"] = confidence
             inputs["iou_threshold"] = iou
             inputs["categories"] = item

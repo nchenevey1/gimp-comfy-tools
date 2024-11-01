@@ -16,14 +16,14 @@ import os
 # ComfyUI Workflow
 def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, height, width, ckpt_name, posprompt, negprompt, seed, steps, CFG, sampler, scheduler, denoise, Lora_list, lora_dict):
     for node in workflow.values():
-        class_type = node.get("class_type")
+        class_type = node.get("class_type").lower()
         inputs = node.get("inputs", {})
         meta = node.get("_meta", {})
 
-        if class_type == "CheckPointLoaderSimple":
+        if class_type == "checkpointloadersimple":
             inputs["ckpt_name"] = ckpt_name
 
-        elif class_type == "Power Lora Loader (rgthree)":
+        elif class_type == "power lora loader (rgthree)":
             for input_key in inputs:
                 if not Lora_list:
                     break
@@ -34,14 +34,14 @@ def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, height, width,
                         inputs[input_key]['strength'] = lora_dict[lora_name][0]
                         inputs[input_key]['on'] = True
 
-        elif class_type == "CLIPTextEncode":
+        elif class_type == "cliptextencode":
             title = meta.get("title", "").lower()
             if 'pos' in title:
                 inputs["text"] = posprompt
             elif 'neg' in title:
                 inputs["text"] = negprompt
 
-        elif class_type == "KSampler":
+        elif class_type == "ksampler":
                 inputs.update({"seed": seed,})
                 if steps>0: inputs.update({"steps": steps})
                 if CFG>0: inputs.update({"cfg": CFG})
@@ -49,12 +49,12 @@ def set_workflow(workflow, base64_utf8_str_mask, base64_utf8_str, height, width,
                 if scheduler != len(SchedulerOptions)-1: inputs.update({"scheduler": SchedulerOptions[scheduler]})
                 if denoise>0: inputs.update({"denoise": denoise})
 
-        elif class_type == "NC_LoadImageGIMP":
+        elif class_type == "nc_loadimagegimp":
             inputs["image"] = base64_utf8_str
             inputs["height"] = height
             inputs["width"] = width
 
-        elif class_type == "NC_LoadMaskGIMP":
+        elif class_type == "nc_loadmaskgimp":
             inputs["mask"] = base64_utf8_str_mask
             inputs["height"] = height
             inputs["width"] = width
