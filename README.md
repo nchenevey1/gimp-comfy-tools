@@ -3,9 +3,9 @@
 GIMP plugins that communicate with ComfyUI.
 
 * <a href="#plugins">GIMP Plugins Basic Instructions</a>
-* <a href="#websocket">GIMP and Websocket
-* <a href="#YOLO">Yolo Instructions
-* <a href="#info">General Information
+* <a href="#websocket">GIMP and Websocket</a>
+* <a href="#YOLO">Yolo Instructions</a>
+* <a href="#info">General Information</a>
 * <a href="#demo">Demonstration</a>
 
 ## <a id="plugins" href="#toc">GIMP Plugins Basic Instructions</a>
@@ -44,7 +44,7 @@ Thank you to ControlAltAI
 * Must have https://github.com/nchenevey1/comfyui-gimp-nodes for sending and receiving websocket RGBA data
 
 * Currently uses specific nodes
-  - (Default EmptyLatentImage node, CheckPointLoderSimple node, CLIPTextEncode node, and KSampler node)
+  - (Default EmptyLatentImage node, CheckPointLoaderSimple node, CLIPTextEncode node, and KSampler node)
 
 * Searches for prompt text nodes by searching CLIPTextEncode nodes for 'pos' and 'neg' in title
   - (Positive prompt node must have 'pos' somewhere in title, negative prompt node must have 'neg')
