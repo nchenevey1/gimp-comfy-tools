@@ -57,6 +57,19 @@ def prepare_input_image(image, drawable):
   input_image_name = r.json()["name"]
   return input_image_name
 
+def prepare_input_mask(image):
+  gimp_dir = gimp.directory
+  comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
+  temp_file_path = os.path.join(comfy_dir, "temp.png")
+  pdb.gimp_progress_set_text("Exporting...")
+  pdb.gimp_file_save(image, image.selection, temp_file_path, temp_file_path)
+  url = "http://{0}/api/upload/image".format(server_address)
+  upload_image_name = "gimp_mask.png"
+  form_data_files = { "image": (upload_image_name, open(temp_file_path, "rb"), content_type) }
+  pdb.gimp_progress_set_text("Uploading...")
+  r = requests.post(url, files=form_data_files)
+  input_mask_name = r.json()["name"]
+  return input_mask_name
 
 def prepare_workflow(seed, image, drawable):
   with open(workflow_path, 'r') as file:
@@ -94,12 +107,25 @@ def prepare_workflow(seed, image, drawable):
         linked_mask_nodes.append(node)
 
     if len(linked_mask_nodes):
-      input_mask_name = prepare_input_mask(image, drawable)
-      
-
-
-
-
+      input_mask_name = prepare_input_mask(image)
+      last_key_number = max(map(int, workflow.keys()))
+      load_mask_key = str(last_key_number + 1)
+      workflow[load_mask_key] = {
+        "inputs": {
+          "image": input_mask_name,
+          "channel": "green",
+          "upload": "image"
+        },
+        "class_type": "LoadImageMask",
+        "_meta": {
+          "title": "Load Image (as Mask)"
+        }
+      }
+      for linked_mask_node in linked_mask_nodes:
+        linked_mask_node["inputs"]["mask"] = [
+          load_mask_key,
+          0
+        ]
 
   return workflow
 
