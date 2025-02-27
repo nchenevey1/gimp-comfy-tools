@@ -11,6 +11,19 @@ from io import BytesIO
 import shutil
 import hashlib
 
+server_address = "127.0.0.1:7860"
+
+favourites = [
+  {
+    "path": "d:\\art\\sd\\comfy-workflows\\gimp\\favourites\\gimp-flux-fill.json",
+    "title": "FLux Fill",
+  },
+  {
+    "path": "d:\\art\\sd\\comfy-workflows\\gimp\\favourites\\gimp-flux-dev.json",
+    "title": "FLux Dev",
+  },
+]
+
 comfy_dir_name = "comfy"
 # temp_file_name = "temp.jpg"
 temp_file_name = "temp.png"
@@ -20,8 +33,6 @@ upload_image_name = "gimp1.jpg"
 # content_type = "image/jpeg"
 # content_type = "image/png"
 # temp_png_name = "temp.jpg"
-server_address = "127.0.0.1:7860"
-workflow_path = "d:\\art\\sd\\comfy-workflows\\gimp\\test1\\gimp-test1-maskleft.json"
 last_inputs_file_name = "last_inputs.json"
 
 def enum(*sequential, **named):
@@ -96,7 +107,7 @@ def prepare_input_mask(image, drawable, repeat):
   # black and white png files are actually smaller than jpgs
   return prepare_input(image, drawable, repeat, "mask", "png")
 
-def prepare_workflow(image, drawable, positive, negative, denoise, seed, repeat):
+def prepare_workflow(image, drawable, workflow_path, positive, negative, denoise, seed, repeat):
   with open(workflow_path, "r") as file:
     workflow_data = file.read()
   workflow = json.loads(workflow_data)
@@ -296,7 +307,7 @@ def insert_output(output, image, seed):
 #     pdb.gimp_file_save(image, image_mask, temp_file, temp_file)
 #     gimp.message(temp_file)
 
-def test1(image, drawable, positive, negative, denoise, seed, repeat):
+def test1(image, drawable, workflow_path, favourite_index, positive, negative, denoise, seed, repeat):
   pdb.gimp_progress_init("Waiting...", None)
   initial_layer = pdb.gimp_image_get_active_layer(image)
   pdb.gimp_image_undo_group_start(image)
@@ -307,11 +318,14 @@ def test1(image, drawable, positive, negative, denoise, seed, repeat):
   if not os.path.exists(comfy_dir):
     os.makedirs(comfy_dir)
 
+  if not workflow_path:
+    workflow_path = favourites[favourite_index]["path"]
+
   if seed:
     if seed == -1:
       seed = random.randint(1, 4294967295)
 
-  workflow = prepare_workflow(image, drawable, positive, negative, denoise, seed, repeat)
+  workflow = prepare_workflow(image, drawable, workflow_path, positive, negative, denoise, seed, repeat)
   output = generate(workflow, image)
   insert_output(output, image, seed)
 
@@ -332,6 +346,10 @@ register(
   [
     (PF_IMAGE, "image", "Input image", None),
     (PF_DRAWABLE, "drawable", "Active Layer", None),
+    (PF_FILE, "workflow_path", "Workflow", None),
+    (PF_OPTION, "favourite_index", "Favourites", 0,
+      map(lambda x: x["title"], favourites)
+    ),
     (PF_TEXT, "positive", "Positive", ""),
     (PF_TEXT, "negative", "Negative", ""),
     (PF_FLOAT, "denoise", "Denoise", 0.0),
