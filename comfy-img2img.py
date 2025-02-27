@@ -96,11 +96,33 @@ def prepare_input_mask(image, drawable, repeat):
   # black and white png files are actually smaller than jpgs
   return prepare_input(image, drawable, repeat, "mask", "png")
 
-def prepare_workflow(image, drawable, seed, repeat):
-  with open(workflow_path, 'r') as file:
+def prepare_workflow(image, drawable, positive, negative, denoise, seed, repeat):
+  with open(workflow_path, "r") as file:
     workflow_data = file.read()
   workflow = json.loads(workflow_data)
   nodes = workflow.values()
+
+  if positive:
+    for node in nodes:
+      inputs = node.get("inputs", {})
+      meta = node.get("_meta", {})
+      title = meta.get("title", "").lower()
+      if "text" in inputs and "pos" in title:
+        inputs["text"] = positive
+
+  if negative:
+    for node in nodes:
+      inputs = node.get("inputs", {})
+      meta = node.get("_meta", {})
+      title = meta.get("title", "").lower()
+      if "text" in inputs and "neg" in title:
+        inputs["text"] = negative
+
+  if denoise:
+    for node in nodes:
+      inputs = node.get("inputs", {})
+      if "denoise" in inputs:
+        inputs["denoise"] = denoise
 
   if seed:
     for node in nodes:
@@ -274,7 +296,7 @@ def insert_output(output, image, seed):
 #     pdb.gimp_file_save(image, image_mask, temp_file, temp_file)
 #     gimp.message(temp_file)
 
-def test1(image, drawable, seed, repeat):
+def test1(image, drawable, positive, negative, denoise, seed, repeat):
   pdb.gimp_progress_init("Waiting...", None)
   initial_layer = pdb.gimp_image_get_active_layer(image)
   pdb.gimp_image_undo_group_start(image)
@@ -289,7 +311,7 @@ def test1(image, drawable, seed, repeat):
     if seed == -1:
       seed = random.randint(1, 4294967295)
 
-  workflow = prepare_workflow(image, drawable, seed, repeat)
+  workflow = prepare_workflow(image, drawable, positive, negative, denoise, seed, repeat)
   output = generate(workflow, image)
   insert_output(output, image, seed)
 
@@ -310,8 +332,11 @@ register(
   [
     (PF_IMAGE, "image", "Input image", None),
     (PF_DRAWABLE, "drawable", "Active Layer", None),
-    (PF_INT, "seed", "seed", -1),
-    (PF_OPTION, "repeat", "Repeat image and mask", Repeat.IfNotChanged, [
+    (PF_TEXT, "positive", "Positive", ""),
+    (PF_TEXT, "negative", "Negative", ""),
+    (PF_FLOAT, "denoise", "Denoise", 0.0),
+    (PF_INT, "seed", "Seed", -1),
+    (PF_OPTION, "repeat", "Repeat", Repeat.IfNotChanged, [
       "If not changed",
       "Yes",
       "No",
