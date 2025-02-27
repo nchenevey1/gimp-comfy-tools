@@ -9,6 +9,7 @@ import uuid
 import websocket
 from io import BytesIO
 import shutil
+import hashlib
 
 comfy_dir_name = "comfy"
 # temp_file_name = "temp.jpg"
@@ -17,61 +18,85 @@ temp_preview_file_name = "temp.jpg"
 upload_image_name = "gimp1.jpg"
 # upload_image_name = "gimp1.png"
 # content_type = "image/jpeg"
-content_type = "image/png"
+# content_type = "image/png"
 # temp_png_name = "temp.jpg"
 server_address = "127.0.0.1:7860"
 workflow_path = "d:\\art\\sd\\comfy-workflows\\gimp\\test1\\gimp-test1-maskleft.json"
+last_inputs_file_name = "last_inputs.json"
 
-def upload_image(image, drawable, str1):
-    pdb.gimp_progress_init("Waiting...", None)
-    gimp_dir = gimp.directory
-    comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
-    if not os.path.exists(comfy_dir):
-        os.makedirs(comfy_dir)
-    temp_file = os.path.join(comfy_dir, temp_file_name)
+def enum(*sequential, **named):
+  enums = dict(zip(sequential, range(len(sequential))), **named)
+  return type('Enum', (), enums)
+  
+Repeat = enum("IfNotChanged", "Yes", "No")
 
-    gimp.message(str(drawable.offsets))
-    gimp.message(temp_file)
-    pdb.gimp_progress_set_text("Exporting...")
-    pdb.gimp_file_save(image, drawable, temp_file, temp_file)
-
-    url = "http://{0}/api/upload/image".format(address)
-    form_data_files = { "image": (upload_image_name, open(temp_file, "rb"), content_type) }
-    gimp.message(url)
-
-    pdb.gimp_progress_set_text("Uploading...")
-    r = requests.post(url, files=form_data_files)
-    gimp.message(str(r.json()))
-
-def prepare_input_image(image, drawable):
+def prepare_input(image, drawable, repeat, type, ext):
   gimp_dir = gimp.directory
   comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
-  temp_file_path = os.path.join(comfy_dir, "temp.jpg")
+  temp_file_name = "temp.{0}".format(ext)
+  temp_file_path = os.path.join(comfy_dir, temp_file_name)
+  last_inputs_file = os.path.join(comfy_dir, last_inputs_file_name)
+  last_inputs_data = {}
+  comfy_name = None
+  if os.path.exists(last_inputs_file):
+    with open(last_inputs_file, "r") as file:
+      last_inputs_data = json.load(file)
+    if last_inputs_data.get(type):
+      comfy_name = last_inputs_data[type]["comfy_name"]
+  if repeat == Repeat.Yes:
+    if comfy_name:
+      return comfy_name
+  layer = drawable
+  if type == "mask":
+    layer = image.selection
+  pixel_region = layer.get_pixel_rgn(0, 0, layer.width, layer.height)
+  pixel_data = pixel_region[:, :]
+  hash = hashlib.sha256(pixel_data).hexdigest()
+  if repeat == Repeat.IfNotChanged:
+    if comfy_name:
+      last_ext = last_inputs_data[type]["ext"]
+      last_hash = last_inputs_data[type]["hash"]
+      if ext == last_ext and hash == last_hash:
+        return comfy_name
   pdb.gimp_progress_set_text("Exporting...")
-  pdb.gimp_file_save(image, drawable, temp_file_path, temp_file_path)
+  pdb.gimp_file_save(image, layer, temp_file_path, temp_file_path)
+  project_path = pdb.gimp_image_get_filename(image) or ""
+  project_name = os.path.splitext(os.path.basename(project_path))[0]
+  current_number = 1
+  if last_inputs_data.get(type):
+    last_project_name = last_inputs_data[type]["project_name"]
+    last_number = last_inputs_data[type]["number"]
+    if last_project_name == project_name and last_number:
+      current_number = last_number + 1
   url = "http://{0}/api/upload/image".format(server_address)
-  upload_image_name = "gimp_image.jpg"
-  form_data_files = { "image": (upload_image_name, open(temp_file_path, "rb"), content_type) }
+  number_str = "{0:05d}".format(current_number)
+  upload_name = "gimp_{0}_{1}_{2}.{3}".format(project_name, type, number_str, ext)
+  content_type = "image/jpeg"
+  if ext == "png":
+    content_type = "image/png"
+  form_data_files = { "image": (upload_name, open(temp_file_path, "rb"), content_type) }
   pdb.gimp_progress_set_text("Uploading...")
   r = requests.post(url, files=form_data_files)
-  input_image_name = r.json()["name"]
-  return input_image_name
+  comfy_name = r.json()["name"]
+  last_inputs_data[type] = {
+    "project_name": project_name,
+    "number": current_number,
+    "hash": hash,
+    "comfy_name": comfy_name,
+    "ext": ext,
+  }
+  with open(last_inputs_file, "w") as f:
+    json.dump(last_inputs_data, f)
+  return comfy_name
 
-def prepare_input_mask(image):
-  gimp_dir = gimp.directory
-  comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
-  temp_file_path = os.path.join(comfy_dir, "temp.png")
-  pdb.gimp_progress_set_text("Exporting...")
-  pdb.gimp_file_save(image, image.selection, temp_file_path, temp_file_path)
-  url = "http://{0}/api/upload/image".format(server_address)
-  upload_image_name = "gimp_mask.png"
-  form_data_files = { "image": (upload_image_name, open(temp_file_path, "rb"), content_type) }
-  pdb.gimp_progress_set_text("Uploading...")
-  r = requests.post(url, files=form_data_files)
-  input_mask_name = r.json()["name"]
-  return input_mask_name
+def prepare_input_image(image, drawable, repeat):
+  return prepare_input(image, drawable, repeat, "image", "jpg")
 
-def prepare_workflow(seed, image, drawable):
+def prepare_input_mask(image, drawable, repeat):
+  # black and white png files are actually smaller than jpgs
+  return prepare_input(image, drawable, repeat, "mask", "png")
+
+def prepare_workflow(image, drawable, seed, repeat):
   with open(workflow_path, 'r') as file:
     workflow_data = file.read()
   workflow = json.loads(workflow_data)
@@ -93,7 +118,7 @@ def prepare_workflow(seed, image, drawable):
       break
   
   if load_image_node:
-    input_image_name = prepare_input_image(image, drawable)
+    input_image_name = prepare_input_image(image, drawable, repeat)
     inputs = load_image_node.get("inputs", {})
     inputs["image"] = input_image_name
     linked_mask_nodes = []
@@ -107,7 +132,7 @@ def prepare_workflow(seed, image, drawable):
         linked_mask_nodes.append(node)
 
     if len(linked_mask_nodes):
-      input_mask_name = prepare_input_mask(image)
+      input_mask_name = prepare_input_mask(image, drawable, repeat)
       last_key_number = max(map(int, workflow.keys()))
       load_mask_key = str(last_key_number + 1)
       workflow[load_mask_key] = {
@@ -249,8 +274,11 @@ def insert_output(output, image, seed):
 #     pdb.gimp_file_save(image, image_mask, temp_file, temp_file)
 #     gimp.message(temp_file)
 
-def test1(image, drawable, seed):
+def test1(image, drawable, seed, repeat):
   pdb.gimp_progress_init("Waiting...", None)
+  initial_layer = pdb.gimp_image_get_active_layer(image)
+  pdb.gimp_image_undo_group_start(image)
+  pdb.gimp_context_push()
 
   gimp_dir = gimp.directory
   comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
@@ -261,10 +289,14 @@ def test1(image, drawable, seed):
     if seed == -1:
       seed = random.randint(1, 4294967295)
 
-  workflow = prepare_workflow(seed, image, drawable)
+  workflow = prepare_workflow(image, drawable, seed, repeat)
   output = generate(workflow, image)
   insert_output(output, image, seed)
 
+  pdb.gimp_context_pop()
+  pdb.gimp_image_undo_group_end(image)
+  pdb.gimp_image_set_active_layer(image, initial_layer)
+  pdb.gimp_displays_flush()
 
 register(
   "test1",        # Function Name
@@ -279,6 +311,11 @@ register(
     (PF_IMAGE, "image", "Input image", None),
     (PF_DRAWABLE, "drawable", "Active Layer", None),
     (PF_INT, "seed", "seed", -1),
+    (PF_OPTION, "repeat", "Repeat image and mask", Repeat.IfNotChanged, [
+      "If not changed",
+      "Yes",
+      "No",
+    ]),
   ],
   [],
   test1, menu="<Image>/Test1",
