@@ -11,7 +11,11 @@ from io import BytesIO
 import shutil
 import hashlib
 
-server_address = "127.0.0.1:7860"
+# ****************************************
+#           User defaults
+# ****************************************
+
+default_server_address = "127.0.0.1:7860"
 
 favourites = [
   {
@@ -24,15 +28,9 @@ favourites = [
   },
 ]
 
+# ****************************************
+
 comfy_dir_name = "comfy"
-# temp_file_name = "temp.jpg"
-temp_file_name = "temp.png"
-temp_preview_file_name = "temp.jpg"
-upload_image_name = "gimp1.jpg"
-# upload_image_name = "gimp1.png"
-# content_type = "image/jpeg"
-# content_type = "image/png"
-# temp_png_name = "temp.jpg"
 last_inputs_file_name = "last_inputs.json"
 
 def enum(*sequential, **named):
@@ -40,8 +38,9 @@ def enum(*sequential, **named):
   return type('Enum', (), enums)
   
 Repeat = enum("IfNotChanged", "Yes", "No")
+exts = ["jpg", "png"]
 
-def prepare_input(image, drawable, repeat, type, ext):
+def prepare_input(image, drawable, server_address, repeat, type, ext):
   gimp_dir = gimp.directory
   comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
   temp_file_name = "temp.{0}".format(ext)
@@ -100,14 +99,14 @@ def prepare_input(image, drawable, repeat, type, ext):
     json.dump(last_inputs_data, f)
   return comfy_name
 
-def prepare_input_image(image, drawable, repeat):
-  return prepare_input(image, drawable, repeat, "image", "jpg")
+def prepare_input_image(image, drawable, server_address, repeat, ext):
+  return prepare_input(image, drawable, server_address, repeat, "image", ext)
 
-def prepare_input_mask(image, drawable, repeat):
+def prepare_input_mask(image, drawable, server_address, repeat):
   # black and white png files are actually smaller than jpgs
-  return prepare_input(image, drawable, repeat, "mask", "png")
+  return prepare_input(image, drawable, server_address, repeat, "mask", "png")
 
-def prepare_workflow(image, drawable, workflow_path, positive, negative, denoise, seed, repeat):
+def prepare_workflow(image, drawable, server_address, workflow_path, positive, negative, denoise, seed, repeat, ext):
   with open(workflow_path, "r") as file:
     workflow_data = file.read()
   workflow = json.loads(workflow_data)
@@ -151,7 +150,7 @@ def prepare_workflow(image, drawable, workflow_path, positive, negative, denoise
       break
   
   if load_image_node:
-    input_image_name = prepare_input_image(image, drawable, repeat)
+    input_image_name = prepare_input_image(image, drawable, server_address, repeat, ext)
     inputs = load_image_node.get("inputs", {})
     inputs["image"] = input_image_name
     linked_mask_nodes = []
@@ -165,7 +164,7 @@ def prepare_workflow(image, drawable, workflow_path, positive, negative, denoise
         linked_mask_nodes.append(node)
 
     if len(linked_mask_nodes):
-      input_mask_name = prepare_input_mask(image, drawable, repeat)
+      input_mask_name = prepare_input_mask(image, drawable, server_address, repeat)
       last_key_number = max(map(int, workflow.keys()))
       load_mask_key = str(last_key_number + 1)
       workflow[load_mask_key] = {
@@ -202,7 +201,7 @@ def insert_preview_layer(image, preview_data, prev_layer):
   pdb.gimp_message_set_handler(CONSOLE) # Warning: Premature end of JPEG file
 
   try:
-    temp_file_path = os.path.join(comfy_dir, temp_preview_file_name)
+    temp_file_path = os.path.join(comfy_dir, "temp.jpg")
     jfif = BytesIO(preview_data)
 
     with open(temp_file_path, "wb") as temp_file:
@@ -225,7 +224,7 @@ def insert_preview_layer(image, preview_data, prev_layer):
   pdb.gimp_message_set_handler(message_handler)
   return preview_layer
 
-def generate(workflow, image):
+def generate(workflow, image, server_address):
   client_id = str(uuid.uuid4())
   ws = websocket.WebSocket()
   pdb.gimp_progress_set_text("Generating...")
@@ -272,7 +271,7 @@ def generate(workflow, image):
 
   return outputs
 
-def insert_outputs(outputs, image, seed):
+def insert_outputs(outputs, image, server_address, seed):
   for output in outputs:
     if not "filename" in output:
       continue
@@ -295,7 +294,7 @@ def insert_outputs(outputs, image, seed):
     pdb.gimp_item_set_name(output_layer, str(seed))
     pdb.gimp_image_insert_layer(image, output_layer, None, 0)
 
-def test1(image, drawable, workflow_path, favourite_index, positive, negative, denoise, seed, repeat):
+def test1(image, drawable, server_address, workflow_path, favourite_index, positive, negative, denoise, seed, repeat, extIndex):
   pdb.gimp_progress_init("Waiting...", None)
   initial_layer = pdb.gimp_image_get_active_layer(image)
   pdb.gimp_image_undo_group_start(image)
@@ -312,10 +311,11 @@ def test1(image, drawable, workflow_path, favourite_index, positive, negative, d
   if seed:
     if seed == -1:
       seed = random.randint(1, 4294967295)
+  ext = exts[ extIndex ]
 
-  workflow = prepare_workflow(image, drawable, workflow_path, positive, negative, denoise, seed, repeat)
-  outputs = generate(workflow, image)
-  insert_outputs(outputs, image, seed)
+  workflow = prepare_workflow(image, drawable, server_address, workflow_path, positive, negative, denoise, seed, repeat, ext)
+  outputs = generate(workflow, image, server_address)
+  insert_outputs(outputs, image, server_address, seed)
 
   pdb.gimp_context_pop()
   pdb.gimp_image_undo_group_end(image)
@@ -334,8 +334,9 @@ register(
   [
     (PF_IMAGE, "image", "Input image", None),
     (PF_DRAWABLE, "drawable", "Active Layer", None),
+    (PF_STRING, "server_address", "Address", default_server_address),
     (PF_FILE, "workflow_path", "Workflow", None),
-    (PF_OPTION, "favourite_index", "Favourites", 0,
+    (PF_OPTION, "favourite_index", "Favourite", 0,
       map(lambda x: x["title"], favourites)
     ),
     (PF_TEXT, "positive", "Positive", ""),
@@ -344,9 +345,10 @@ register(
     (PF_INT, "seed", "Seed", -1),
     (PF_OPTION, "repeat", "Repeat", Repeat.IfNotChanged, [
       "If not changed",
-      "Yes",
-      "No",
+      "Always",
+      "Never",
     ]),
+    (PF_OPTION, "extIndex", "Export as", 0, [ "jpg (faster)", "png" ]),
   ],
   [],
   test1, menu="<Image>/Test1",
