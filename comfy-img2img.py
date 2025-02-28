@@ -235,7 +235,7 @@ def generate(workflow, image):
   r = requests.post(url, json=payload)
 
   preview_layer = None
-  output = {}
+  outputs = []
 
   while True:
     data_receive = ws.recv()
@@ -246,7 +246,7 @@ def generate(workflow, image):
       if message_json["type"] == "executed":
         if "output" in message_json["data"]:
           if "images" in message_json["data"]["output"]:
-            output = message_json["data"]["output"]["images"][0]
+            outputs = message_json["data"]["output"]["images"]
       elif message_json["type"] == "execution_success":
         break
       elif "exception_message" in message_json["data"]:
@@ -270,42 +270,30 @@ def generate(workflow, image):
   if preview_layer:
     pdb.gimp_image_remove_layer(image, preview_layer)
 
-  return output
+  return outputs
 
-def insert_output(output, image, seed):
-  if not "filename" in output:
-    return
-  output_file_name = output["filename"]
-  pdb.gimp_progress_set_text("Downloading...")
-  pdb.gimp_progress_pulse()
-  gimp_dir = gimp.directory
-  comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
-  output_file_path = os.path.join(comfy_dir, output_file_name)
-  url = "http://{0}/api/view".format(server_address)
-  with requests.get(url, params=output, stream=True) as r:
-    with open(output_file_path, 'wb') as f:
-      shutil.copyfileobj(r.raw, f)
+def insert_outputs(outputs, image, seed):
+  for output in outputs:
+    if not "filename" in output:
+      continue
+    output_file_name = output["filename"]
+    pdb.gimp_progress_set_text("Downloading...")
+    pdb.gimp_progress_pulse()
+    gimp_dir = gimp.directory
+    comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
+    output_file_path = os.path.join(comfy_dir, output_file_name)
+    url = "http://{0}/api/view".format(server_address)
+    with requests.get(url, params=output, stream=True) as r:
+      with open(output_file_path, 'wb') as f:
+        shutil.copyfileobj(r.raw, f)
 
-  ext = output_file_name.split(".")[-1]
-  temp_file_name = "temp.{0}".format(ext)
-  temp_file_path = os.path.join(comfy_dir, temp_file_name)
-  shutil.move(output_file_path, temp_file_path)
-  output_layer = pdb.gimp_file_load_layer(image, temp_file_path, run_mode=RUN_NONINTERACTIVE)
-  pdb.gimp_item_set_name(output_layer, str(seed))
-  pdb.gimp_image_insert_layer(image, output_layer, None, 0)
-
-# def test1(image, drawable, str1):
-#     pdb.gimp_progress_init("Waiting...", None)
-#     gimp_dir = gimp.directory
-#     comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
-#     if not os.path.exists(comfy_dir):
-#         os.makedirs(comfy_dir)
-#     temp_file = os.path.join(comfy_dir, temp_file_name)
-
-#     image_mask = image.selection
-
-#     pdb.gimp_file_save(image, image_mask, temp_file, temp_file)
-#     gimp.message(temp_file)
+    ext = output_file_name.split(".")[-1]
+    temp_file_name = "temp.{0}".format(ext)
+    temp_file_path = os.path.join(comfy_dir, temp_file_name)
+    shutil.move(output_file_path, temp_file_path)
+    output_layer = pdb.gimp_file_load_layer(image, temp_file_path, run_mode=RUN_NONINTERACTIVE)
+    pdb.gimp_item_set_name(output_layer, str(seed))
+    pdb.gimp_image_insert_layer(image, output_layer, None, 0)
 
 def test1(image, drawable, workflow_path, favourite_index, positive, negative, denoise, seed, repeat):
   pdb.gimp_progress_init("Waiting...", None)
@@ -326,8 +314,8 @@ def test1(image, drawable, workflow_path, favourite_index, positive, negative, d
       seed = random.randint(1, 4294967295)
 
   workflow = prepare_workflow(image, drawable, workflow_path, positive, negative, denoise, seed, repeat)
-  output = generate(workflow, image)
-  insert_output(output, image, seed)
+  outputs = generate(workflow, image)
+  insert_outputs(outputs, image, seed)
 
   pdb.gimp_context_pop()
   pdb.gimp_image_undo_group_end(image)
