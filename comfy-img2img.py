@@ -139,6 +139,8 @@ def prepare_workflow(image, drawable, server_address, workflow_path, positive, n
   with open(workflow_path, "r") as file:
     workflow_data = file.read()
   workflow = json.loads(workflow_data)
+  if "nodes" in workflow:
+    raise Exception('Export workflow in API format!')
   nodes = workflow.values()
 
   if positive:
@@ -326,36 +328,42 @@ def insert_outputs(outputs, image, server_address, seed, offsets):
       pdb.gimp_layer_set_offsets(output_layer, *offsets)
 
 def test1(image, drawable, server_address, workflow_path, favourite_index, positive, negative, denoise, seed, areaIndex, repeat, extIndex):
+  if not image:
+    gimp.message("Create image first!")
+    return
   pdb.gimp_progress_init("Waiting...", None)
   initial_layer = pdb.gimp_image_get_active_layer(image)
   pdb.gimp_image_undo_group_start(image)
   pdb.gimp_context_push()
 
-  gimp_dir = gimp.directory
-  comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
-  if not os.path.exists(comfy_dir):
-    os.makedirs(comfy_dir)
+  try:
+    gimp_dir = gimp.directory
+    comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
+    if not os.path.exists(comfy_dir):
+      os.makedirs(comfy_dir)
 
-  if not workflow_path:
-    workflow_path = favourites[favourite_index]["path"]
+    if not workflow_path:
+      workflow_path = favourites[favourite_index]["path"]
 
-  if seed:
-    if seed == -1:
-      seed = random.randint(1, 4294967295)
-  area = areas[ areaIndex ]
-  ext = exts[ extIndex ]
-  offsets = []
-  if area == "drawable":
-    offsets = pdb.gimp_drawable_offsets(drawable)
+    if seed:
+      if seed == -1:
+        seed = random.randint(1, 4294967295)
+    area = areas[ areaIndex ]
+    ext = exts[ extIndex ]
+    offsets = []
+    if area == "drawable":
+      offsets = pdb.gimp_drawable_offsets(drawable)
 
-  workflow = prepare_workflow(image, drawable, server_address, workflow_path, positive, negative, denoise, seed, area, repeat, ext)
-  outputs = generate(workflow, image, server_address)
-  insert_outputs(outputs, image, server_address, seed, offsets)
-
-  pdb.gimp_context_pop()
-  pdb.gimp_image_undo_group_end(image)
-  pdb.gimp_image_set_active_layer(image, initial_layer)
-  pdb.gimp_displays_flush()
+    workflow = prepare_workflow(image, drawable, server_address, workflow_path, positive, negative, denoise, seed, area, repeat, ext)
+    outputs = generate(workflow, image, server_address)
+    insert_outputs(outputs, image, server_address, seed, offsets)
+  except Exception as e:
+    gimp.message("Error: " + str(e))
+  finally:
+    pdb.gimp_context_pop()
+    pdb.gimp_image_undo_group_end(image)
+    pdb.gimp_image_set_active_layer(image, initial_layer)
+    pdb.gimp_displays_flush()
 
 register(
   "test1",        # Function Name
