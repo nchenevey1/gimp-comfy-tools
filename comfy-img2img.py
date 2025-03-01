@@ -38,9 +38,10 @@ def enum(*sequential, **named):
   return type('Enum', (), enums)
   
 Repeat = enum("IfNotChanged", "Yes", "No")
+areas = ["drawable", "image"]
 exts = ["jpg", "png"]
 
-def prepare_input(image, drawable, server_address, repeat, type, ext):
+def prepare_input(type, image, drawable, server_address, area, repeat, ext):
   gimp_dir = gimp.directory
   comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
   temp_file_name = "temp.{0}".format(ext)
@@ -58,7 +59,28 @@ def prepare_input(image, drawable, server_address, repeat, type, ext):
       return comfy_name
   layer = drawable
   if type == "mask":
-    layer = image.selection
+    if area == "drawable":
+      width = pdb.gimp_drawable_width(drawable)
+      height = pdb.gimp_drawable_height(drawable)
+      offx, offy = pdb.gimp_drawable_offsets(drawable)
+      if (
+        width != image.width or
+        height != image.height or
+        offx != 0 or
+        offy != 0
+      ):
+        mask_layer = pdb.gimp_layer_new_from_drawable(image.selection, image)
+        layer = pdb.gimp_layer_new(image, width, height, mask_layer.type, "mask", 100, mask_layer.mode)
+        selection_region = mask_layer.get_pixel_rgn(offx, offy, width, height)
+        layer_region = layer.get_pixel_rgn(0, 0, width, height)
+        layer_region[ : , : ] = selection_region[ : , : ]
+      else:
+        layer = image.selection
+    else:
+      layer = image.selection
+  else:
+    if area == "image":
+      layer = pdb.gimp_layer_new_from_visible(image, image, "Visible")
   pixel_region = layer.get_pixel_rgn(0, 0, layer.width, layer.height)
   pixel_data = pixel_region[:, :]
   hash = hashlib.sha256(pixel_data).hexdigest()
@@ -70,6 +92,7 @@ def prepare_input(image, drawable, server_address, repeat, type, ext):
         return comfy_name
   pdb.gimp_progress_set_text("Exporting...")
   pdb.gimp_file_save(image, layer, temp_file_path, temp_file_path)
+  # shutil.copy(temp_file_path, os.path.join(comfy_dir, "mask.png"))
   project_path = pdb.gimp_image_get_filename(image) or ""
   project_name = os.path.splitext(os.path.basename(project_path))[0]
   current_number = 1
@@ -99,14 +122,14 @@ def prepare_input(image, drawable, server_address, repeat, type, ext):
     json.dump(last_inputs_data, f)
   return comfy_name
 
-def prepare_input_image(image, drawable, server_address, repeat, ext):
-  return prepare_input(image, drawable, server_address, repeat, "image", ext)
+def prepare_input_image(image, drawable, server_address, area, repeat, ext):
+  return prepare_input("image", image, drawable, server_address, area, repeat, ext)
 
-def prepare_input_mask(image, drawable, server_address, repeat):
+def prepare_input_mask(image, drawable, server_address, area, repeat):
   # black and white png files are actually smaller than jpgs
-  return prepare_input(image, drawable, server_address, repeat, "mask", "png")
+  return prepare_input("mask", image, drawable, server_address, area, repeat, "png")
 
-def prepare_workflow(image, drawable, server_address, workflow_path, positive, negative, denoise, seed, repeat, ext):
+def prepare_workflow(image, drawable, server_address, workflow_path, positive, negative, denoise, seed, area, repeat, ext):
   with open(workflow_path, "r") as file:
     workflow_data = file.read()
   workflow = json.loads(workflow_data)
@@ -150,7 +173,7 @@ def prepare_workflow(image, drawable, server_address, workflow_path, positive, n
       break
   
   if load_image_node:
-    input_image_name = prepare_input_image(image, drawable, server_address, repeat, ext)
+    input_image_name = prepare_input_image(image, drawable, server_address, area, repeat, ext)
     inputs = load_image_node.get("inputs", {})
     inputs["image"] = input_image_name
     linked_mask_nodes = []
@@ -164,7 +187,7 @@ def prepare_workflow(image, drawable, server_address, workflow_path, positive, n
         linked_mask_nodes.append(node)
 
     if len(linked_mask_nodes):
-      input_mask_name = prepare_input_mask(image, drawable, server_address, repeat)
+      input_mask_name = prepare_input_mask(image, drawable, server_address, area, repeat)
       last_key_number = max(map(int, workflow.keys()))
       load_mask_key = str(last_key_number + 1)
       workflow[load_mask_key] = {
@@ -271,7 +294,7 @@ def generate(workflow, image, server_address):
 
   return outputs
 
-def insert_outputs(outputs, image, server_address, seed):
+def insert_outputs(outputs, image, server_address, seed, offsets):
   for output in outputs:
     if not "filename" in output:
       continue
@@ -293,8 +316,10 @@ def insert_outputs(outputs, image, server_address, seed):
     output_layer = pdb.gimp_file_load_layer(image, temp_file_path, run_mode=RUN_NONINTERACTIVE)
     pdb.gimp_item_set_name(output_layer, str(seed))
     pdb.gimp_image_insert_layer(image, output_layer, None, 0)
+    if offsets:
+      pdb.gimp_layer_set_offsets(output_layer, *offsets)
 
-def test1(image, drawable, server_address, workflow_path, favourite_index, positive, negative, denoise, seed, repeat, extIndex):
+def test1(image, drawable, server_address, workflow_path, favourite_index, positive, negative, denoise, seed, areaIndex, repeat, extIndex):
   pdb.gimp_progress_init("Waiting...", None)
   initial_layer = pdb.gimp_image_get_active_layer(image)
   pdb.gimp_image_undo_group_start(image)
@@ -311,11 +336,15 @@ def test1(image, drawable, server_address, workflow_path, favourite_index, posit
   if seed:
     if seed == -1:
       seed = random.randint(1, 4294967295)
+  area = areas[ areaIndex ]
   ext = exts[ extIndex ]
+  offsets = []
+  if area == "drawable":
+    offsets = pdb.gimp_drawable_offsets(drawable)
 
-  workflow = prepare_workflow(image, drawable, server_address, workflow_path, positive, negative, denoise, seed, repeat, ext)
+  workflow = prepare_workflow(image, drawable, server_address, workflow_path, positive, negative, denoise, seed, area, repeat, ext)
   outputs = generate(workflow, image, server_address)
-  insert_outputs(outputs, image, server_address, seed)
+  insert_outputs(outputs, image, server_address, seed, offsets)
 
   pdb.gimp_context_pop()
   pdb.gimp_image_undo_group_end(image)
@@ -343,6 +372,10 @@ register(
     (PF_TEXT, "negative", "Negative", ""),
     (PF_FLOAT, "denoise", "Denoise", 0.0),
     (PF_INT, "seed", "Seed", -1),
+    (PF_OPTION, "areaIndex", "Area", 0, [
+      "Active layer",
+      "Visible image"
+    ]),
     (PF_OPTION, "repeat", "Repeat", Repeat.IfNotChanged, [
       "If not changed",
       "Always",
