@@ -28,6 +28,8 @@ favourites = [
   },
 ]
 
+select_all_if_empty = True
+
 # ****************************************
 
 comfy_dir_name = "comfy"
@@ -59,6 +61,10 @@ def prepare_input(type, image, drawable, server_address, area, repeat, ext):
       return comfy_name
   layer = drawable
   if type == "mask":
+    mask_layer = None
+    if select_all_if_empty and pdb.gimp_selection_is_empty(image):
+      mask_layer = pdb.gimp_layer_new_from_drawable(image.selection, image)
+      pdb.gimp_drawable_fill(mask_layer, 2)
     if area == "drawable":
       width = pdb.gimp_drawable_width(drawable)
       height = pdb.gimp_drawable_height(drawable)
@@ -69,15 +75,15 @@ def prepare_input(type, image, drawable, server_address, area, repeat, ext):
         offx != 0 or
         offy != 0
       ):
-        mask_layer = pdb.gimp_layer_new_from_drawable(image.selection, image)
+        mask_layer = mask_layer or pdb.gimp_layer_new_from_drawable(image.selection, image)
         layer = pdb.gimp_layer_new(image, width, height, mask_layer.type, "mask", 100, mask_layer.mode)
         selection_region = mask_layer.get_pixel_rgn(offx, offy, width, height)
         layer_region = layer.get_pixel_rgn(0, 0, width, height)
         layer_region[ : , : ] = selection_region[ : , : ]
       else:
-        layer = image.selection
+        layer = mask_layer or image.selection
     else:
-      layer = image.selection
+      layer = mask_layer or image.selection
   else:
     if area == "image":
       layer = pdb.gimp_layer_new_from_visible(image, image, "Visible")
