@@ -327,7 +327,7 @@ def insert_outputs(outputs, image, server_address, seed, offsets):
     if offsets:
       pdb.gimp_layer_set_offsets(output_layer, *offsets)
 
-def test1(image, drawable, server_address, workflow_path, favourite_index, positive, negative, denoise, seed, areaIndex, repeat, extIndex):
+def comfy_img2img(image, drawable, server_address, workflow_path, favourite_index, positive, negative, denoise, seed, areaIndex, repeat, extIndex):
   if not image:
     gimp.message("Create image first!")
     return
@@ -366,14 +366,14 @@ def test1(image, drawable, server_address, workflow_path, favourite_index, posit
     pdb.gimp_displays_flush()
 
 register(
-  "test1",        # Function Name
-  "test1",        # Description
-  "test1",        # Help
-  "morozig",      # Author
-  "morozig",      # 
-  "12/01/2025",   # Date Created
-  "Test1",        # Menu label
-  "",             # Image types
+  "comfy_img2img",         # Function Name
+  "img2img in ComfyUI",    # Description
+  "img2img in ComfyUI",    # Help
+  "morozig",               # Author
+  "morozig",               # 
+  "01/03/2025",            # Date Created
+  "img2img",               # Menu label
+  "",                      # Image types
   [
     (PF_IMAGE, "image", "Input image", None),
     (PF_DRAWABLE, "drawable", "Active Layer", None),
@@ -398,7 +398,7 @@ register(
     (PF_OPTION, "extIndex", "Export as", 0, [ "jpg (faster)", "png" ]),
   ],
   [],
-  test1, menu="<Image>/Test1",
+  comfy_img2img, menu="<Image>/Comfy Tools",
 )
 
 main()
