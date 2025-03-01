@@ -15,16 +15,16 @@ import hashlib
 #           User defaults
 # ****************************************
 
-default_server_address = "127.0.0.1:7860"
+default_server_address = "127.0.0.1:8188"
 
 favourites = [
   {
-    "path": "d:\\art\\sd\\comfy-workflows\\gimp\\favourites\\gimp-flux-fill.json",
-    "title": "FLux Fill",
+    "path": "d:\\your_path1\\your_workflow1.json",
+    "title": "Put Your Workflow1 Name",
   },
   {
-    "path": "d:\\art\\sd\\comfy-workflows\\gimp\\favourites\\gimp-flux-dev.json",
-    "title": "FLux Dev",
+    "path": "d:\\your_path2\\your_workflow2.json",
+    "title": "Put Your Workflow2 Name",
   },
 ]
 
