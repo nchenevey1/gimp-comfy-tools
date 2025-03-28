@@ -1,6 +1,7 @@
 # GIMP Plugins with ComfyUI
 
 GIMP plugins that communicate with ComfyUI.
+TODO: Tutorial on how to add websocket to GIMP 3, new videos to demonstrate the GIMP 3 plugins.
 
 * <a href="#plugins">GIMP Plugins Basic Instructions</a>
 * <a href="#info">General Information</a>
