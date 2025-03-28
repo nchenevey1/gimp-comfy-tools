@@ -1,0 +1,227 @@
+{
+  "1": {
+    "inputs": {
+      "context_expand_pixels": 50,
+      "context_expand_factor": 1,
+      "fill_mask_holes": true,
+      "blur_mask_pixels": 50,
+      "invert_mask": false,
+      "blend_pixels": 32,
+      "rescale_algorithm": "bicubic",
+      "mode": "ranged size",
+      "force_width": 1024,
+      "force_height": 1024,
+      "rescale_factor": 1,
+      "min_width": 512,
+      "min_height": 512,
+      "max_width": 768,
+      "max_height": 768,
+      "padding": 8,
+      "image": [
+        "3",
+        0
+      ],
+      "mask": [
+        "3",
+        1
+      ]
+    },
+    "class_type": "InpaintCrop",
+    "_meta": {
+      "title": "Inpaint Crop"
+    }
+  },
+  "2": {
+    "inputs": {
+      "rescale_algorithm": "bislerp",
+      "stitch": [
+        "1",
+        0
+      ],
+      "inpainted_image": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "InpaintStitch",
+    "_meta": {
+      "title": "Inpaint Stitch"
+    }
+  },
+  "3": {
+    "inputs": {
+      "image": "clipspace/example.png [input]",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "10": {
+    "inputs": {
+      "ckpt_name": "checkpoint.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "11": {
+    "inputs": {
+      "text": "Positive Prompt",
+      "clip": [
+        "27",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt) - Positive"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "Negative Prompt",
+      "clip": [
+        "27",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt) - Negative"
+    }
+  },
+  "15": {
+    "inputs": {
+      "samples": [
+        "31",
+        3
+      ],
+      "vae": [
+        "10",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "19": {
+    "inputs": {
+      "positive": [
+        "11",
+        0
+      ],
+      "negative": [
+        "12",
+        0
+      ],
+      "vae": [
+        "10",
+        2
+      ],
+      "pixels": [
+        "1",
+        1
+      ],
+      "mask": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "InpaintModelConditioning",
+    "_meta": {
+      "title": "InpaintModelConditioning"
+    }
+  },
+  "27": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "lora_1": {
+        "on": false,
+        "lora": "None",
+        "strength": 0.5
+      },
+      "➕ Add Lora": "",
+      "model": [
+        "10",
+        0
+      ],
+      "clip": [
+        "10",
+        1
+      ]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree)"
+    }
+  },
+  "30": {
+    "inputs": {
+      "rng_source": "cpu",
+      "cfg_denoiser": true,
+      "add_seed_noise": true,
+      "seed": 10,
+      "weight": 0.1
+    },
+    "class_type": "Noise Control Script",
+    "_meta": {
+      "title": "Noise Control Script"
+    }
+  },
+  "31": {
+    "inputs": {
+      "seed": 440497206815112,
+      "steps": 20,
+      "cfg": 5,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "normal",
+      "denoise": 0.4,
+      "preview_method": "auto",
+      "vae_decode": "false",
+      "model": [
+        "27",
+        0
+      ],
+      "positive": [
+        "19",
+        0
+      ],
+      "negative": [
+        "19",
+        1
+      ],
+      "latent_image": [
+        "19",
+        2
+      ],
+      "script": [
+        "30",
+        0
+      ]
+    },
+    "class_type": "KSampler (Efficient)",
+    "_meta": {
+      "title": "KSampler (Efficient)"
+    }
+  },
+  "32": {
+    "inputs": {
+      "filename_prefix": "2025-03-19/SDXL",
+      "images": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

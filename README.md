@@ -3,16 +3,28 @@
 GIMP plugins that communicate with ComfyUI.
 
 * <a href="#plugins">GIMP Plugins Basic Instructions</a>
-* <a href="#websocket">GIMP and Websocket</a>
-* <a href="#YOLO">Yolo Instructions</a>
 * <a href="#info">General Information</a>
-* <a href="#demo">Demonstration</a>
+* <a href="#websocket">Gimp 2: GIMP and Websocket</a>
+* <a href="#YOLO">Gimp 2: Yolo Instructions</a>
+* <a href="#demo">Gimp 2: Demonstration</a>
 
 ## <a id="plugins" href="#toc">GIMP Plugins Basic Instructions</a>
 * Go to Edit>Preferences
 * Click the + sign next to Folders
 * Click Plug-ins
 * Add the directory containing the plugin .py files
+
+## <a id="info" href="#toc">General Information</a>
+* ComfyUI must be running with all of the required nodes for the specified workflow installed
+
+* Searches for prompt text nodes by searching CLIPTextEncode nodes for 'pos' and 'neg' in title
+  - (Positive prompt node must have 'pos' somewhere in title, negative prompt node must have 'neg')
+
+* Currently uses Power Lora Loader (rgthree)
+
+* Image to image uses GIMP selection tool. Entire image is used if no selection is present
+
+* Seed is random if set to -1
 
 ## <a id="websocket" href="#toc">GIMP and Websocket</a>
 * Pip is required:
@@ -37,27 +49,6 @@ Download the models and follow the instructions outlined in this video:
 https://www.youtube.com/watch?v=wEd1wPlCBaQ
 
 Thank you to ControlAltAI
-
-## <a id="info" href="#toc">General Information</a>
-* ComfyUI must be running with all of the required nodes for the specified workflow installed
-
-* Must have https://github.com/nchenevey1/comfyui-gimp-nodes for sending and receiving websocket RGBA data
-
-* Currently uses specific nodes
-  - (Default EmptyLatentImage node, CheckPointLoaderSimple node, CLIPTextEncode node, and KSampler node)
-
-* Searches for prompt text nodes by searching CLIPTextEncode nodes for 'pos' and 'neg' in title
-  - (Positive prompt node must have 'pos' somewhere in title, negative prompt node must have 'neg')
-
-* Currently uses Power Lora Loader (rgthree)
-
-* Lora count limited by options in GIMP ui
-
-* Image to image uses GIMP selection tool. Entire image is used if no selection is present
-
-* Seed is random if set to 0
-
-* Make sure to select the current GIMP image in the "input image" ui option when using image to image
 
 ## <a id="demo" href="#toc">Demonstration</a>
 
