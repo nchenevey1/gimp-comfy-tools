@@ -1,6 +1,7 @@
 # GIMP Plugins with ComfyUI
 
 GIMP plugins that communicate with ComfyUI.
+TODO: Tutorial on how to add websocket to GIMP 3, new videos to demonstrate the GIMP 3 plugins.
 
 * <a href="#plugins">GIMP Plugins Basic Instructions</a>
 * <a href="#info">General Information</a>
@@ -26,7 +27,7 @@ GIMP plugins that communicate with ComfyUI.
 
 * Seed is random if set to -1
 
-## <a id="websocket" href="#toc">GIMP and Websocket</a>
+## <a id="websocket" href="#toc">Gimp 2: GIMP and Websocket</a>
 * Pip is required:
   - I got get-pip.py from https://bootstrap.pypa.io/pip/2.7/get-pip.py
 
@@ -43,14 +44,14 @@ GIMP plugins that communicate with ComfyUI.
 * Now you can run the command to download and install:  
 `.\python.exe -m pip install websocket-client`
 
-## <a id="YOLO" href="#toc">Yolo Instructions</a>
+## <a id="YOLO" href="#toc">Gimp 2: Yolo Instructions</a>
 Download the models and follow the instructions outlined in this video:
 
 https://www.youtube.com/watch?v=wEd1wPlCBaQ
 
 Thank you to ControlAltAI
 
-## <a id="demo" href="#toc">Demonstration</a>
+## <a id="demo" href="#toc">Gimp 2: Demonstration</a>
 
 https://github.com/user-attachments/assets/1254844a-43f3-40df-9914-cb07b1fe0448
 

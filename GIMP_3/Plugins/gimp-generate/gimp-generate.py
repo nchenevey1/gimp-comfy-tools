@@ -79,13 +79,15 @@ def create_comfy_dir():
     return comfy_dir
 
 def get_model_files_with_icons(model_file_path, model_icon_path):
+    if not os.path.exists(model_file_path):
+        return None
     model_files = [f for f in os.listdir(model_file_path) if f.endswith(".safetensors")]
     model_data = []
 
     for model_file in model_files:
         file_name, file_ext = os.path.splitext(model_file)
         icon_file = None
-        for ext in [".png", ".jpg"]:
+        for ext in [".png", ".jpg", ".jpeg", ".webp"]:
             potential_icon = os.path.join(model_icon_path, file_name + ext)
             if os.path.exists(potential_icon):
                 icon_file = potential_icon
@@ -97,8 +99,11 @@ def get_model_files_with_icons(model_file_path, model_icon_path):
 
     return model_data
 
-lora_data = get_model_files_with_icons(lora_file_path, lora_icon_path)
-checkpoint_data = get_model_files_with_icons(checkpoints_file_path, checkpoints_icon_path)
+try:
+    lora_data = get_model_files_with_icons(lora_file_path, lora_icon_path)
+    checkpoint_data = get_model_files_with_icons(checkpoints_file_path, checkpoints_icon_path)
+except:
+    pass
 
 ############################################################################################################
 # Create Sampler and Scheduler options
@@ -408,9 +413,11 @@ class MainProcedureDialog(GimpUi.ProcedureDialog):
         self.ksampler_section = self.add_expandable_section(content_box, "KSampler Settings", "ksampler", ksampler_children, None)
 
         # Expandable Icon Views
-        self.checkpoints_view = self.add_expandable_section(content_box, "Checkpoints", "icon_view", checkpoint_data, Gtk.SelectionMode.SINGLE)
-        self.loras_view = self.add_expandable_section(content_box, "Loras", "icon_view", lora_data, Gtk.SelectionMode.MULTIPLE)
-
+        try:
+            self.checkpoints_view = self.add_expandable_section(content_box, "Checkpoints", "icon_view", checkpoint_data, Gtk.SelectionMode.SINGLE)
+            self.loras_view = self.add_expandable_section(content_box, "Loras", "icon_view", lora_data, Gtk.SelectionMode.MULTIPLE)
+        except:
+            pass
         # Add the box inside the scrolled window
         scrolled_window.add(content_box)
 
@@ -610,14 +617,19 @@ def get_main_dialog(procedure, config, previous_inputs):
     response = dialog.run()
     if response:
         main_dict["positive_prompt"], main_dict["negative_prompt"] = dialog.get_text_results()
-        
-        checkpoint_index = dialog.get_selected_items(dialog.checkpoints_view)
-        if checkpoint_index:
-            main_dict["checkpoint_selection"] = os.path.basename(checkpoint_data[int(checkpoint_index[0])]["file"])
-        else:
-            main_dict["checkpoint_selection"] = None
 
-        main_dict["lora_selection"] = dialog.get_selected_items(dialog.loras_view)
+        try:
+            checkpoint_index = dialog.get_selected_items(dialog.checkpoints_view)
+            if checkpoint_index:
+                main_dict["checkpoint_selection"] = os.path.basename(checkpoint_data[int(checkpoint_index[0])]["file"])
+            else:
+                main_dict["checkpoint_selection"] = None
+        except:
+            main_dict["checkpoint_selection"] = None
+        try:
+            main_dict["lora_selection"] = dialog.get_selected_items(dialog.loras_view)
+        except:
+            main_dict["lora_selection"] = None
     else:
         return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
 
@@ -733,7 +745,10 @@ class GimpGenerate (Gimp.PlugIn):
 
                 try:
                     main_dict, ksampler_dict = get_main_dialog(procedure, config, previous_inputs)
-                    lora_dict = get_lora_dialog(procedure, config, main_dict["lora_selection"])
+                    if main_dict["lora_selection"]:
+                        lora_dict = get_lora_dialog(procedure, config, main_dict["lora_selection"])
+                    else:
+                        lora_dict = None
                 except Exception as e:
                     return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
 
