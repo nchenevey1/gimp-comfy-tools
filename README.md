@@ -5,9 +5,10 @@ TODO: Tutorial on how to add websocket to GIMP 3, new videos to demonstrate the 
 
 * <a href="#plugins">GIMP Plugins Basic Instructions</a>
 * <a href="#info">General Information</a>
-* <a href="#websocket">Gimp 2: GIMP and Websocket</a>
-* <a href="#YOLO">Gimp 2: Yolo Instructions</a>
-* <a href="#demo">Gimp 2: Demonstration</a>
+* <a href="#demo">Demonstration</a>
+* <a href="#websocket2">Gimp 2: GIMP and Websocket</a>
+* <a href="#YOLO2">Gimp 2: Yolo Instructions</a>
+* <a href="#demo2">Gimp 2: Demonstration</a>
 
 ## <a id="plugins" href="#toc">GIMP Plugins Basic Instructions</a>
 * Go to Edit>Preferences
@@ -27,7 +28,11 @@ TODO: Tutorial on how to add websocket to GIMP 3, new videos to demonstrate the 
 
 * Seed is random if set to -1
 
-## <a id="websocket" href="#toc">Gimp 2: GIMP and Websocket</a>
+## <a id="demo" href="#toc">Demonstration</a>
+
+https://github.com/user-attachments/assets/e7b488c6-6351-436f-8135-cea50003e778
+
+## <a id="websocket2" href="#toc">Gimp 2: GIMP and Websocket</a>
 * Pip is required:
   - I got get-pip.py from https://bootstrap.pypa.io/pip/2.7/get-pip.py
 
@@ -44,14 +49,14 @@ TODO: Tutorial on how to add websocket to GIMP 3, new videos to demonstrate the 
 * Now you can run the command to download and install:  
 `.\python.exe -m pip install websocket-client`
 
-## <a id="YOLO" href="#toc">Gimp 2: Yolo Instructions</a>
+## <a id="YOLO2" href="#toc">Gimp 2: Yolo Instructions</a>
 Download the models and follow the instructions outlined in this video:
 
 https://www.youtube.com/watch?v=wEd1wPlCBaQ
 
 Thank you to ControlAltAI
 
-## <a id="demo" href="#toc">Gimp 2: Demonstration</a>
+## <a id="demo2" href="#toc">Gimp 2: Demonstration</a>
 
 https://github.com/user-attachments/assets/1254844a-43f3-40df-9914-cb07b1fe0448
 
