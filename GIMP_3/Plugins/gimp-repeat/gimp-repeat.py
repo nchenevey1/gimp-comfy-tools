@@ -7,16 +7,8 @@ import sys
 import gi
 gi.require_version('Gimp', '3.0')
 from gi.repository import Gimp
-gi.require_version('GimpUi', '3.0')
-from gi.repository import GimpUi
 from gi.repository import GLib
-from gi.repository import GObject
 from gi.repository import Gio
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gdk
-from gi.repository import GdkPixbuf
-from gi.repository import Gtk
-from gi.repository import Gegl
 
 # Python imports
 import os
@@ -36,22 +28,29 @@ default_server_address = "127.0.0.1:8188"
 
 comfy_dir_name = "comfy"
 
-last_inputs_file_name = "last_inputs.json"
-
-generated_workflow_file_name = "GIMP_workflow.json"
-
-log_file_name = "data_receive_log.txt"
-
-select_all_if_empty = True
-
-timeout_duration = 60  # Timeout duration in seconds
-
 def create_comfy_dir():
     gimp_dir = Gimp.directory()
     comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
     if not os.path.exists(comfy_dir):
         raise Exception("Comfy directory does not exist.")
     return comfy_dir
+
+comfy_dir = create_comfy_dir()
+
+### Set values for defaults ###
+data_dir = os.path.join(comfy_dir, "data")
+os.makedirs(data_dir, exist_ok=True)
+
+generated_workflow_file_name = "GIMP_workflow.json"
+generated_workflow_file_path = os.path.join(data_dir, generated_workflow_file_name)
+
+# Create a temporary images directory
+temp_images_dir = os.path.join(comfy_dir, "temporary_images")
+os.makedirs(temp_images_dir, exist_ok=True)
+
+log_file_name = "data_receive_log.txt"
+
+timeout_duration = 60  # Timeout duration in seconds
 
 # ***********************************************
 #           Generation Functions
@@ -60,9 +59,9 @@ def create_comfy_dir():
 def insert_preview_layer(image, preview_data, prev_layer, display_exists, comfy_dir):
     preview_layer = prev_layer
 
-    temp_file_path = os.path.join(comfy_dir, "temp.jpg")
+    temp_file_path = os.path.join(temp_images_dir, "temp.jpg")
     jfif = BytesIO(preview_data)
-    
+
     with open(temp_file_path, "wb") as temp_file:
         temp_file.write(jfif.read())
         
@@ -103,7 +102,7 @@ def is_jsonable(x):
     except (TypeError, OverflowError, ValueError):
         return False
     
-def write_to_log_file(data, comfy_dir):
+def write_to_log_file(data):
     log_file_path = os.path.join(comfy_dir, log_file_name)
     try:
         with open(log_file_path, "a") as log_file:
@@ -111,7 +110,7 @@ def write_to_log_file(data, comfy_dir):
     except Exception as log_error:
         Gimp.message(f"Error writing to log file: {log_error}")
 
-def generate(workflow, image, server_address, display_exists, comfy_dir):
+def generate(workflow, image, server_address, display_exists):
     Gimp.progress_set_text("Generating...")
     try:
         client_id = str(uuid.uuid4())
@@ -130,9 +129,6 @@ def generate(workflow, image, server_address, display_exists, comfy_dir):
     try:
         while True:
             data_receive = ws.recv()
-
-            # # Debugging
-            # write_to_log_file(data_receive, comfy_dir)
 
             if is_jsonable(data_receive):
                 message_json = json.loads(data_receive)
@@ -177,7 +173,7 @@ def generate(workflow, image, server_address, display_exists, comfy_dir):
   
     return outputs, new_display
 
-def insert_outputs(outputs, image, server_address, seed, display, display_exists, comfy_dir):
+def insert_outputs(outputs, image, server_address, seed, display, display_exists):
     for output in outputs:
         if not "filename" in output:
             continue
@@ -192,7 +188,7 @@ def insert_outputs(outputs, image, server_address, seed, display, display_exists
 
         ext = output_file_name.split(".")[-1]
         temp_file_name = "temp.{0}".format(ext)
-        temp_file_path = os.path.join(comfy_dir, temp_file_name)
+        temp_file_path = os.path.join(temp_images_dir, temp_file_name)
         shutil.move(output_file_path, temp_file_path)
         output_layer = Gimp.file_load_layer(1, image, Gio.File.new_for_path(temp_file_path))
         output_layer.set_name(str(seed))
@@ -245,32 +241,34 @@ class GimpRepeat (Gimp.PlugIn):
             if not image:
                 display_exists = False
                 image = Gimp.Image.new(64, 64, Gimp.ImageBaseType.RGB)
-
-            comfy_dir = create_comfy_dir()
-            workflow_json_path = os.path.join(comfy_dir, generated_workflow_file_name)
-
-            if not os.path.exists(workflow_json_path):
-                Gimp.message(f"Workflow JSON file not found at {workflow_json_path}")
+            else:
+                Gimp.Image.undo_group_start(image)
+                Gimp.context_push()
+            if not os.path.exists(generated_workflow_file_path):
+                Gimp.message(f"Workflow JSON file not found at {generated_workflow_file_path}")
                 return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
-            
             # Load Workflow JSON
-            with open(workflow_json_path, "r") as file:
+            with open(generated_workflow_file_path, "r") as file:
                 workflow_data = file.read()
             workflow = json.loads(workflow_data)
-
+            
             seed = random.randint(1, 4294967295)
 
             # Insert Seed into Workflow
             workflow = insert_seed_into_workflow(workflow, seed)
 
             # Prepare Outputs
-            outputs, display = generate(workflow, image, default_server_address, display_exists, comfy_dir)
+            outputs, display = generate(workflow, image, default_server_address, display_exists)
 
             # Insert Outputs
-            insert_outputs(outputs, image, default_server_address, seed, display, display_exists, comfy_dir)
+            insert_outputs(outputs, image, default_server_address, seed, display, display_exists)
         except Exception as e:
             Gimp.message(f"Error Main: {e}")
             return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
+        finally:
+            Gimp.Image.undo_group_end(image)
+            Gimp.context_pop()
+            Gimp.displays_flush()
 
         return procedure.new_return_values(Gimp.PDBStatusType.SUCCESS, GLib.Error())
 

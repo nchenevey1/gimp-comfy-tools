@@ -1,7 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# Python imports
+import os
+import json
+import random
 import sys
+
+import importlib.util
+
+gimp_dialogs_import_path = os.path.join(os.path.dirname(__file__), "gimp_dialogs.py")
+gimp_dialogs_spec = importlib.util.spec_from_file_location("gimp_dialogs", gimp_dialogs_import_path)
+GimpDialogs = importlib.util.module_from_spec(gimp_dialogs_spec)
+gimp_dialogs_spec.loader.exec_module(GimpDialogs)
+
+gimp_utils_import_path = os.path.join(os.path.dirname(__file__), "gimp_utils.py")
+gimp_utils_spec = importlib.util.spec_from_file_location("gimp_utils", gimp_utils_import_path)
+GimpUtils = importlib.util.module_from_spec(gimp_utils_spec)
+gimp_utils_spec.loader.exec_module(GimpUtils)
+
+comfy_utils_import_path = os.path.join(os.path.dirname(__file__), "comfy_utils.py")
+comfy_utils_spec = importlib.util.spec_from_file_location("comfy_utils", comfy_utils_import_path)
+ComfyUtils = importlib.util.module_from_spec(comfy_utils_spec)
+comfy_utils_spec.loader.exec_module(ComfyUtils)
 
 # GIMP imports
 import gi
@@ -11,99 +32,54 @@ gi.require_version('GimpUi', '3.0')
 from gi.repository import GimpUi
 from gi.repository import GLib
 from gi.repository import GObject
-from gi.repository import Gio
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gdk
-from gi.repository import GdkPixbuf
-from gi.repository import Gtk
 from gi.repository import Gegl
-
-# Python imports
-import os
-import json
-import random
-import uuid
-import requests
-import websocket
-from io import BytesIO
-import shutil
 
 # ****************************************
 #           User defaults
 # ****************************************
 
+comfy_dir_name = "comfy"
+gimp_dir = Gimp.directory()
+comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
+os.makedirs(comfy_dir, exist_ok=True)
+
 default_server_address = "127.0.0.1:8188"
 
-favorites = [
-  {
-    "path": "C:\\Path\\To\\Workflow_1.json",
-    "title": "Unique Title 1",
-  },
-  {
-    "path": "C:\\Path\\To\\Workflow_2.json",
-    "title": "Unique Title 2",
-  },
-  {
-    "path": "C:\\Path\\To\\Workflow_3.json",
-    "title": "Unique Title 3",
-  },
-  {
-    "path": "C:\\Path\\To\\Workflow_4.json",
-    "title": "Unique Title 4",
-  }
-]
+# Find the directory containing this script
+error_log_file_path = os.path.join(comfy_dir, "logfile.txt")
 
-lora_file_path = "C:\\Path\\To\\lora_folder"
-lora_icon_path = "C:\\Path\\To\\lora_icon_folder"
+# Create a temporary images directory
+temp_images_dir = os.path.join(comfy_dir, "temporary_images")
+os.makedirs(temp_images_dir, exist_ok=True)
 
-checkpoints_file_path = "C:\\Path\\To\\checkpoints_folder"
-checkpoints_icon_path = "C:\\Path\\To\\checkpoints_icon_folder"
+# Read favorites.json from comfy_dir and check existence
+workflows_dir = os.path.join(comfy_dir, "Workflows")
+os.makedirs(workflows_dir, exist_ok=True)
 
-comfy_dir_name = "comfy"
+favorites_json_path = os.path.join(workflows_dir, "favorites.json")
+favorites_exists = os.path.exists(favorites_json_path)
+if favorites_exists:
+    with open(favorites_json_path, "r", encoding="utf-8") as f:
+        favorites_data = json.load(f)
+    favorites = favorites_data.get("favorites", [])
+else:
+    favorites = []
+
+### Set values for defaults ###
+data_dir = os.path.join(comfy_dir, "data")
+os.makedirs(data_dir, exist_ok=True)
 
 last_inputs_file_name = "last_inputs.json"
+last_inputs_file_path = os.path.join(data_dir, last_inputs_file_name)
 
-generated_workflow_file_name = "GIMP_workflow.json"
+generic_workflow_file_name = "GIMP_workflow.json"
+generic_workflow_file_path = os.path.join(data_dir, generic_workflow_file_name)
+generated_workflow_file_name = "GIMP_generate_workflow.json"
+generated_workflow_file_path = os.path.join(data_dir, generated_workflow_file_name)
 
 log_file_name = "data_receive_log.txt"
 
-select_all_if_empty = True
-
 timeout_duration = 60  # Timeout duration in seconds
-
-def create_comfy_dir():
-    gimp_dir = Gimp.directory()
-    comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
-    if not os.path.exists(comfy_dir):
-        os.makedirs(comfy_dir)
-    return comfy_dir
-
-def get_model_files_with_icons(model_file_path, model_icon_path):
-    if not os.path.exists(model_file_path):
-        return None
-    model_files = [f for f in os.listdir(model_file_path) if f.endswith(".safetensors")]
-    model_data = []
-
-    for model_file in model_files:
-        file_name, file_ext = os.path.splitext(model_file)
-        icon_file = None
-        for ext in [".png", ".jpg", ".jpeg", ".webp"]:
-            potential_icon = os.path.join(model_icon_path, file_name + ext)
-            if os.path.exists(potential_icon):
-                icon_file = potential_icon
-                break
-        model_data.append({
-            "file": os.path.join(model_file_path, model_file),
-            "icon": icon_file
-        })
-
-    return model_data
-
-try:
-    lora_data = get_model_files_with_icons(lora_file_path, lora_icon_path)
-    checkpoint_data = get_model_files_with_icons(checkpoints_file_path, checkpoints_icon_path)
-except:
-    pass
 
 ############################################################################################################
 # Create Sampler and Scheduler options
@@ -113,528 +89,35 @@ SamplerOptions = ["euler", "euler_cfg_pp", "euler_ancestral", "euler_ancestral_c
 
 SchedulerOptions = ["normal", "karras", "exponential", "sgm_uniform", "simple", "ddim_uniform", "beta", "None"]
 
-# ***********************************************
-#           Image to Image Generation Functions
-# ***********************************************
-
-def prepare_workflow(workflow_path, main_dict, lora_dict, ksampler_dict):
-    save_inputs = {}
-    with open(workflow_path, "r") as file:
-        workflow_data = file.read()
-    
-    workflow = json.loads(workflow_data)
-    
-    if "nodes" in workflow:
-        raise Exception('Export workflow in API format!')
-    nodes = workflow.values()
-
-    if ksampler_dict:
-        for node in nodes:
-            inputs = node.get("inputs", {})
-            if "steps" in inputs:
-                inputs["steps"] = ksampler_dict["steps"]
-            if "cfg" in inputs:
-                inputs["cfg"] = ksampler_dict["cfg"]
-            if "sampler_name" in inputs:
-                inputs["sampler_name"] = ksampler_dict["sampler"]
-            if "scheduler" in inputs:
-                inputs["scheduler"] = ksampler_dict["scheduler"]
-    
-    if main_dict["positive_prompt"]: 
-        for node in nodes:
-            inputs = node.get("inputs", {})
-            meta = node.get("_meta", {})
-            title = meta.get("title").lower()
-            if "text" in inputs and "pos" in title:
-                inputs["text"] = main_dict["positive_prompt"]
-                save_inputs["positive_generate_prompt"] = main_dict["positive_prompt"]
-
-    if main_dict["negative_prompt"]: 
-        for node in nodes:
-            inputs = node.get("inputs", {})
-            meta = node.get("_meta", {})
-            title = meta.get("title").lower()
-            if "text" in inputs and "neg" in title:
-                inputs["text"] = main_dict["negative_prompt"]
-                save_inputs["negative_generate_prompt"] = main_dict["negative_prompt"]
-    
-    if main_dict["seed"]: 
-        for node in nodes:
-            inputs = node.get("inputs", {})
-            if "seed" in inputs:
-                inputs["seed"] = main_dict["seed"]
-
-    if main_dict["checkpoint_selection"]: 
-        for node in nodes:
-            inputs = node.get("inputs", {})
-            if "ckpt_name" in inputs:
-                inputs["ckpt_name"] = main_dict["checkpoint_selection"]
-
-    if lora_dict:
-        for node in nodes:
-            inputs = node.get("inputs", {})
-            meta = node.get("_meta", {})
-            title = meta.get("title").lower()
-            if "power lora loader" in title:
-                lora_index = 1
-                for key, value in lora_dict.items():
-                    inputs[f"lora_{lora_index}"] = {
-                        "on": True,
-                        "lora": key,
-                        "strength": value
-                    }
-                    lora_index += 1
-
-    if main_dict["image_height"] or main_dict["image_width"]:
-        for node in nodes:
-            inputs = node.get("inputs", {})
-            if "height" in inputs and "width" in inputs:
-                inputs["height"] = main_dict["image_height"]
-                inputs["width"] = main_dict["image_width"]
-
-    return workflow, save_inputs
-    
-def insert_preview_layer(image, preview_data, prev_layer, comfy_dir):
-    preview_layer = prev_layer
-
-    temp_file_path = os.path.join(comfy_dir, "temp.jpg")
-    jfif = BytesIO(preview_data)
-    
-    with open(temp_file_path, "wb") as temp_file:
-        temp_file.write(jfif.read())
-    
-    preview_layer = Gimp.file_load_layer(1, image, Gio.File.new_for_path(temp_file_path))
-
-    if prev_layer:
-        prev_layer.set_name("prev")
-    preview_layer.set_name("preview")
-
-    preview_layer_height = preview_layer.get_height()
-    preview_layer_width = preview_layer.get_width()
-    image.resize(preview_layer_width, preview_layer_height, 0, 0)
-
-    image.insert_layer(preview_layer, None, 0)
-
-    if prev_layer:
-        image.remove_layer(prev_layer)
-
-    Gimp.progress_set_text("Generating...")
-    Gimp.displays_flush()
-    
-    return preview_layer
-
-def open_websocket(server_address, client_id):
-    try:
-        ws = websocket.WebSocket()
-        ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id), timeout=timeout_duration)
-    except Exception as e:
-        Gimp.message("Error Websocket: " + str(e))
-        return []
-    return ws
-
-def is_jsonable(x):
-    try:
-        json.loads(x)
-        return True
-    except (TypeError, OverflowError, ValueError):
-        return False
-    
-def write_to_log_file(data, comfy_dir):
-    log_file_path = os.path.join(comfy_dir, log_file_name)
-    try:
-        with open(log_file_path, "a") as log_file:
-            log_file.write(data + "\n\n")
-    except Exception as log_error:
-        Gimp.message(f"Error writing to log file: {log_error}")
-
-def generate(workflow, image, server_address, comfy_dir):
-    Gimp.progress_set_text("Generating...")
-
-    try:
-        client_id = str(uuid.uuid4())
-        ws = open_websocket(server_address, client_id)
-        payload = {"prompt": workflow, "client_id": client_id}
-        url = "http://{0}/api/prompt".format(server_address)
-        r = requests.post(url, json=payload)
-    except Exception as e:
-        Gimp.message("Error Posting: " + str(e))
-        return []
-    
-    Gimp.progress_set_text("Receiving...")
-    preview_layer = None
-    new_display = None
-    outputs = []
-
-    while True:
-        data_receive = ws.recv()
-
-        # # Debugging
-        # write_to_log_file(data_receive, comfy_dir)
-
-        if is_jsonable(data_receive):
-            message_json = json.loads(data_receive)
-            if message_json["type"] == "executed":
-                if "output" in message_json["data"]:
-                    if "images" in message_json["data"]["output"]:
-                        outputs = message_json["data"]["output"]["images"]
-            elif message_json["type"] == "execution_success":
-                break
-            elif "exception_message" in message_json["data"]:
-                error_message = ("Error: " + message_json["data"]["exception_message"])
-                Gimp.message("Error:\n" + error_message)
-                break
-            elif message_json["type"] == "progress":
-                step = message_json["data"]["value"]
-                max_steps = message_json["data"]["max"]
-                fraction = float(step) / max_steps
-                Gimp.progress_update(fraction)
-            elif message_json["type"] == "execution_interrupted":
-                Gimp.message("Execution interrupted.")
-                break
-        else:
-            int_value = data_receive[0] + data_receive[1] + data_receive[2] + data_receive[3]
-            if int_value == 1:
-                preview_data = data_receive[8:]
-                try:
-                    preview_layer = insert_preview_layer(image, preview_data, preview_layer, comfy_dir)
-                    if not new_display:
-                        new_display = Gimp.Display.new(image)
-                except:
-                    continue
-            else:
-                Gimp.message("Received data is not JSON or preview.\nReceived start value is {}".format(str(int_value)))
-
-    if preview_layer:
-        Gimp.Image.remove_layer(image, preview_layer)
-    
-    ws.close()
-  
-    return outputs, new_display
-
-def insert_outputs(outputs, image, server_address, seed, display, comfy_dir):
-    for output in outputs:
-        if not "filename" in output:
-            continue
-        output_file_name = output["filename"]
-        Gimp.progress_set_text("Downloading...")
-        Gimp.progress_pulse()
-        output_file_path = os.path.join(comfy_dir, output_file_name)
-        url = "http://{0}/api/view".format(server_address)
-        with requests.get(url, params=output, stream=True) as r:
-            with open(output_file_path, 'wb') as f:
-                shutil.copyfileobj(r.raw, f)
-
-        ext = output_file_name.split(".")[-1]
-        temp_file_name = "temp.{0}".format(ext)
-        temp_file_path = os.path.join(comfy_dir, temp_file_name)
-        shutil.move(output_file_path, temp_file_path)
-        output_layer = Gimp.file_load_layer(1, image, Gio.File.new_for_path(temp_file_path))
-        output_layer.set_name(str(seed))
-
-        output_layer_height = output_layer.get_height()
-        output_layer_width = output_layer.get_width()
-        image.resize(output_layer_width, output_layer_height, 0, 0)
-
-        image.insert_layer(output_layer, None, 0)
-
-        if not display:
-            display = Gimp.Display.new(image)
-
-def get_workflow_path(workflow_name):
-    for favorite in favorites:
-        if favorite["title"] == workflow_name:
-            return favorite["path"]
-    return None
-
-def write_to_json_file(data, file_path):
-    with open(file_path, "w") as file:
-        json.dump(data, file, indent=4)
-
-def update_json_file(data, file_path):
-    if os.path.exists(file_path):
-        with open(file_path, "r") as file:
-            existing_data = json.load(file)
-    else:
-        existing_data = {}
-    existing_data.update(data)
-    write_to_json_file(existing_data, file_path)
-
-def load_previous_inputs(comfy_dir):
-    previous_inputs_path = os.path.join(comfy_dir, last_inputs_file_name)
-    previous_inputs = {}
-    if os.path.exists(previous_inputs_path):
-        with open(previous_inputs_path, "r") as text_inputs_file:
-            previous_inputs = json.load(text_inputs_file)
-    return previous_inputs, previous_inputs_path
-
-# ***********************************************
-#           GIMP Dialog and Procedure
-# ***********************************************
-class MainProcedureDialog(GimpUi.ProcedureDialog):
-    def __init__(self, procedure, config, previous_inputs):
-        super().__init__(procedure=procedure, config=config)
-        self.set_default_size(700, 700)
-
-        # Apply CSS
-        self.apply_css()
-
-        # Get the main content area of the ProcedureDialog
-        content_area = self.get_content_area()
-        content_area.get_style_context().add_class("content_area")
-
-        # Create a scrolled window for the entire dialog
-        scrolled_window = self.create_scrolled_window("content_scrolled_window", Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC, 400, 300)
-
-        # Create a container (VBox) to hold all UI elements inside the scroll area
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        content_box.set_border_width(10)
-        content_box.get_style_context().add_class("content_box")
-
-        # Positive Prompt
-        self.positive_textview = self.add_labeled_textview(content_box, "Positive Prompt", previous_inputs.get("positive_generate_prompt", ""))
-        # Negative Prompt
-        self.negative_textview = self.add_labeled_textview(content_box, "Negative Prompt", previous_inputs.get("negative_generate_prompt", ""))
-
-        # Populate GIMP's default argument UI elements
-        self.fill(None)  # This adds the GIMP argument widgets to the content area
-
-        child_list = content_area.get_children()
-        ksampler_children = []
-        for idx, child in enumerate(child_list):
-            if idx == len(child_list) - 1 or idx == len(child_list) - 2: # Don't remove the last two children (buttons)
-                continue
-            content_area.remove(child) # Remove Children
-            if idx < 4: # Skip adding the first 4 children (steps, cfg, sampler, scheduler)
-                ksampler_children.append(child)
-                continue
-            content_box.pack_start(child, False, False, 5) # Repack Children
-
-        # Add the KSampler children into an expandable section
-        self.ksampler_section = self.add_expandable_section(content_box, "KSampler Settings", "ksampler", ksampler_children, None)
-
-        # Expandable Icon Views
-        try:
-            self.checkpoints_view = self.add_expandable_section(content_box, "Checkpoints", "icon_view", checkpoint_data, Gtk.SelectionMode.SINGLE)
-            self.loras_view = self.add_expandable_section(content_box, "Loras", "icon_view", lora_data, Gtk.SelectionMode.MULTIPLE)
-        except:
-            pass
-        # Add the box inside the scrolled window
-        scrolled_window.add(content_box)
-
-        # Add the scrolled window into the GimpUi dialog
-        content_area.pack_start(scrolled_window, True, True, 0)
-
-        self.show_all()
-
-    def apply_css(self):
-        css = """
-            .content_box {
-                padding-left: 30px;
-                padding-right: 30px;
-            }
-            textview {
-                min-height: 100px;
-            }
-            .textview_box {
-                margin-top: 1rem;
-                min-height: 100px;
-            }
-            .textview_scrolled_window {
-                min-height: 100px;
-            }
-            .expander {
-                margin-bottom: 25px;
-            }
-            
-        """
-        style_provider = Gtk.CssProvider()
-        style_provider.load_from_data(css.encode("utf-8"))
-        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), style_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-
-    def create_scrolled_window(self, item_class, horizontal_scroll, vertical_scroll, requested_width=400, requested_height=300):
-        scrolled_window = Gtk.ScrolledWindow()
-        scrolled_window.set_policy(horizontal_scroll, vertical_scroll)
-        scrolled_window.set_size_request(requested_width, requested_height)
-        scrolled_window.get_style_context().add_class(item_class)
-        return scrolled_window
-
-    def add_labeled_textview(self, parent, label_text, default_value=""):
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-            box.get_style_context().add_class("textview_box")
-
-            label = Gtk.Label(label=label_text)
-
-            scrolled_window = self.create_scrolled_window("textview_scrolled_window", Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC, 0, 0)
-
-            textview = Gtk.TextView()
-            textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)  # ensure horizontal wrapping
-            textview.get_style_context().add_class("textview_text")
-
-            # Set default text
-            buffer = textview.get_buffer()
-            buffer.set_text(default_value)
-
-            scrolled_window.add(textview)
-
-            box.pack_start(label, False, False, 0)
-            box.pack_start(scrolled_window, False, False, 0)
-            parent.pack_start(box, False, False, 0)
-
-            return textview
-    
-    def create_icon_view(self, icon_data, selection_mode, item_class="icon_view"):
-        # Pixbuf for icon, str for filename
-        list_store = Gtk.ListStore(GdkPixbuf.Pixbuf, str)
-
-        for item in icon_data:
-            try:
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(item["icon"], 128, 128)  # Resize icons
-            except Exception as e:
-                print(f"Error loading {item['icon']}: {e}")
-                pixbuf = None  # None if icon can't be loaded
-            list_store.append([pixbuf, os.path.basename(item["file"]).replace(".safetensors", "")])
-
-        # Create IconView
-        icon_view = Gtk.IconView.new()
-        icon_view.get_style_context().add_class(item_class)
-        icon_view.set_model(list_store)
-        icon_view.set_selection_mode(selection_mode)  # Allow multiple or single selection
-        icon_view.set_pixbuf_column(0)  # Use first column for icons
-        icon_view.set_text_column(1)    # Use second column for text
-        icon_view.set_item_width(80)    # Adjust item width for better layout
-
-        return icon_view
-
-    def add_expandable_section(self, parent, title, sub_window, data, aux_data, width=400, height=300):
-        expander = Gtk.Expander(label=title)
-        expander.get_style_context().add_class("expander")
-
-        if sub_window == "icon_view":
-            window_content = self.create_icon_view(data, aux_data)
-            scrolled_window = self.create_scrolled_window("expander_scrolled_window", Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC, width, height)
-            scrolled_window.add(window_content)
-            expander.add(scrolled_window)
-        elif sub_window == "ksampler":
-            window_content = self.create_ksampler_section(data)
-            expander.add(window_content)
-        
-        parent.pack_start(expander, False, False, 0)
-
-        return window_content
-    
-    def create_ksampler_section(self, data):
-        ksampler_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        ksampler_box.get_style_context().add_class("ksampler_box")
-        for ksampler_child in data:
-            ksampler_box.pack_start(ksampler_child, False, False, 0)
-        return ksampler_box
-    
-    def get_text_results(self):
-        positive_buffer = self.positive_textview.get_buffer()
-        negative_buffer = self.negative_textview.get_buffer()
-        positive_text = positive_buffer.get_text(positive_buffer.get_start_iter(), positive_buffer.get_end_iter(), True)
-        negative_text = negative_buffer.get_text(negative_buffer.get_start_iter(), negative_buffer.get_end_iter(), True)
-        return positive_text, negative_text
-    
-    def get_selected_items(self, icon_view):
-        return [str(item) for item in icon_view.get_selected_items()]
-
-# ***********************************************
-#           Lora Dialog and Procedure
-# ***********************************************
-class LoraDialog(GimpUi.ProcedureDialog):
-    def __init__(self, procedure, config, lora_selection):
-        super().__init__(procedure=procedure, config=config)
-        self.set_default_size(700, 200)
-
-        # Get the main content area of the ProcedureDialog
-        content_area = self.get_content_area()
-        content_area.get_style_context().add_class("content_area")
-
-        # Create a scrolled window for the entire dialog
-        scrolled_window = Gtk.ScrolledWindow()
-        scrolled_window.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled_window.set_size_request(400, 300)  # Adjust dialog size
-
-        # Create a container (VBox) to hold all UI elements inside the scroll area
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        content_box.set_border_width(10)
-        content_box.get_style_context().add_class("content_box")
-
-        # Populate GIMP's default argument UI elements
-        self.fill(None)
-
-        for child in content_area.get_children():
-            if child.get_name() == "GtkBox":
-                continue
-            content_area.remove(child)  # Remove them
-
-        self.lora_box = self.create_lora_box(content_box, lora_selection)
-
-        # Add the box inside the scrolled window
-        scrolled_window.add(content_box)
-
-        # Add the scrolled window into the GimpUi dialog
-        content_area.pack_start(scrolled_window, True, True, 0)
-
-        self.show_all()
-
-    def create_lora_box(self, parent, lora_selection):
-        lora_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        lora_box.get_style_context().add_class("lora_box")
-
-        for lora in lora_selection:
-            current_lora_data = lora_data[int(lora)]
-            lora_file = current_lora_data["file"]
-            lora_name = os.path.basename(lora_file).replace(".safetensors", "")
-
-            lora_label = Gtk.Label(label=lora_name)
-
-            # Create a double spinner for the Lora weight
-            adjustment = Gtk.Adjustment(value=0, lower=-5, upper=5, step_increment=0.01, page_increment=0.1, page_size=0)
-            lora_spinner = Gtk.SpinButton(adjustment=adjustment, climb_rate=0.01, digits=2)
-            lora_spinner.set_numeric(True)
-
-            lora_box.pack_start(lora_label, False, False, 0)
-            lora_box.pack_start(lora_spinner, False, False, 0)
-            parent.pack_start(lora_box, False, False, 0)
-        return lora_box
-    
-    def get_lora_dict(self):
-        lora_dict = {}
-        children = self.lora_box.get_children()
-        for i in range(0, len(children), 2):
-            lora_name = children[i].get_text()
-            lora_weight = children[i + 1].get_value()
-            lora_dict[lora_name] = lora_weight
-        return lora_dict
-
 def get_main_dialog(procedure, config, previous_inputs):
     GimpUi.init('nc-gimp-generate')
     Gegl.init(None)
     main_dict = {}
-    dialog = MainProcedureDialog(procedure, config, previous_inputs)
+    dialog = GimpDialogs.MainProcedureDialog(procedure, config, previous_inputs)
     response = dialog.run()
     if response:
-        main_dict["positive_prompt"], main_dict["negative_prompt"] = dialog.get_text_results()
-
+        try:
+            dialog.save_current_inputs_to_history()
+            main_dict["positive_prompt"], main_dict["negative_prompt"] = dialog.get_text_results()
+            main_dict["workflow"] = dialog.selected_workflow_path
+        except Exception as e:
+            GimpUtils.write_to_log_file(f"Error in get_main_dialog (workflow): {e}\n", error_log_file_path)
         try:
             checkpoint_index = dialog.get_selected_items(dialog.checkpoints_view)
             if checkpoint_index:
-                main_dict["checkpoint_selection"] = os.path.basename(checkpoint_data[int(checkpoint_index[0])]["file"])
+                main_dict["checkpoint_selection"] = dialog.get_selected_checkpoint(dialog.checkpoints_view)
             else:
                 main_dict["checkpoint_selection"] = None
         except:
             main_dict["checkpoint_selection"] = None
         try:
-            main_dict["lora_selection"] = dialog.get_selected_items(dialog.loras_view)
+            main_dict["lora_selection"] = dialog.get_selected_lora_data(dialog.loras_view)
         except:
             main_dict["lora_selection"] = None
     else:
         return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
 
     main_dict["seed"] = config.get_property('seed')
-    main_dict["workflow"] = config.get_property('workflow')
     main_dict["image_height"] = config.get_property('height')
     main_dict["image_width"] = config.get_property('width')
     main_dict["export_format"] = config.get_property('format')
@@ -648,7 +131,7 @@ def get_main_dialog(procedure, config, previous_inputs):
 def get_lora_dialog(procedure, config, lora_selection):
     # Lora Dialog
     if lora_selection:
-        lora_dialog = LoraDialog(procedure, config, lora_selection)
+        lora_dialog = GimpDialogs.LoraDialog(procedure, config, lora_selection)
         lora_response = lora_dialog.run()
         if lora_response:
             lora_dict = lora_dialog.get_lora_dict()
@@ -708,7 +191,6 @@ class GimpGenerate (Gimp.PlugIn):
                                     "Scheduler", scheduler_choice, SchedulerOptions[0],
                                     GObject.ParamFlags.READWRITE)
         
-        ## Main Settings ##
         # Image Height
         procedure.add_int_argument("height", "_Height", "Height", 1, 10000, 1152,
                                 GObject.ParamFlags.READWRITE)
@@ -718,13 +200,7 @@ class GimpGenerate (Gimp.PlugIn):
         # Seed
         procedure.add_int_argument("seed", "_Seed", "Seed", -1, 2147483647, -1,
                                 GObject.ParamFlags.READWRITE)
-        # Workflow
-        workflow_choice = Gimp.Choice.new()
-        for idx, favorite in enumerate(favorites):
-            workflow_choice.add(favorite["title"], idx, favorite["title"], favorite["title"])
-        procedure.add_choice_argument("workflow", "_Workflow", 
-                                    "Workflow", workflow_choice, favorites[2]["title"],
-                                    GObject.ParamFlags.READWRITE)
+
         # Export Format
         export_format_choice = Gimp.Choice.new()
         export_format_choice.add("PNG", 1, "PNG", "PNG")
@@ -739,10 +215,7 @@ class GimpGenerate (Gimp.PlugIn):
         try:
             if run_mode == Gimp.RunMode.INTERACTIVE:
                 Gimp.progress_init("Waiting...")
-
-                comfy_dir = create_comfy_dir()
-                previous_inputs, previous_inputs_path = load_previous_inputs(comfy_dir)
-
+                previous_inputs, previous_inputs_path = GimpUtils.load_previous_inputs(last_inputs_file_path)
                 try:
                     main_dict, ksampler_dict = get_main_dialog(procedure, config, previous_inputs)
                     if main_dict["lora_selection"]:
@@ -758,32 +231,35 @@ class GimpGenerate (Gimp.PlugIn):
                 Gimp.context_push()
 
                 try:
-                    if main_dict["seed"] == -1:
+                    if main_dict["seed"] == -1 or main_dict["seed"] == 0:
                         main_dict["seed"] = random.randint(1, 4294967295)
 
                     # Prepare Inputs
-                    workflow_path = get_workflow_path(main_dict["workflow"])
+                    workflow_path = main_dict["workflow"]
+                    if not workflow_path:
+                        Gimp.message("No workflow selected. Please select a workflow from the dropdown.")
+                        return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
                     
                     # Prepare Workflow
                     Gimp.progress_set_text("Preparing workflow...")
                     try:
-                        workflow, text_inputs = prepare_workflow(workflow_path, main_dict, lora_dict, ksampler_dict)
+                        workflow, text_inputs = ComfyUtils.prepare_workflow(workflow_path, main_dict, lora_dict, ksampler_dict)
                     except Exception as e:
                         Gimp.message(f"Error Preparing Workflow: {e}")
                         return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
                     
                     if text_inputs:
-                        update_json_file(text_inputs, previous_inputs_path)
+                        GimpUtils.update_json_file(text_inputs, previous_inputs_path)
 
                     # Write Workflow
-                    workflow_json_path = os.path.join(comfy_dir, generated_workflow_file_name)
-                    write_to_json_file(workflow, workflow_json_path)
+                    GimpUtils.write_to_json_file(workflow, generated_workflow_file_path)
+                    GimpUtils.write_to_json_file(workflow, generic_workflow_file_path)
 
                     # Prepare Outputs
-                    outputs, display = generate(workflow, new_image, default_server_address, comfy_dir)
+                    outputs, display = ComfyUtils.generate(workflow, new_image, default_server_address)
 
                     # Insert Outputs
-                    insert_outputs(outputs, new_image, default_server_address, main_dict["seed"], display, comfy_dir)
+                    ComfyUtils.insert_outputs(outputs, new_image, default_server_address, main_dict["seed"], display)
                 except Exception as e:
                     Gimp.message(f"Error: {e}")
                     return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())

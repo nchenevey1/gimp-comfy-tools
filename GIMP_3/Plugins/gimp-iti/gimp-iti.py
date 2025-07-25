@@ -32,38 +32,44 @@ import shutil
 #           User defaults
 # ****************************************
 
+comfy_dir_name = "comfy"
+gimp_dir = Gimp.directory()
+comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
+os.makedirs(comfy_dir, exist_ok=True)
+
 default_server_address = "127.0.0.1:8188"
 
-favorites = [
-  {
-    "path": "C:\\Path\\To\\Workflow_1.json",
-    "title": "Unique Title 1",
-  },
-  {
-    "path": "C:\\Path\\To\\Workflow_2.json",
-    "title": "Unique Title 2",
-  },
-  {
-    "path": "C:\\Path\\To\\Workflow_3.json",
-    "title": "Unique Title 3",
-  },
-  {
-    "path": "C:\\Path\\To\\Workflow_4.json",
-    "title": "Unique Title 4",
-  }
-]
+# Find the directory containing this script
+error_log_file = os.path.join(comfy_dir, "logfile.txt")
 
-lora_file_path = "C:\\Path\\To\\lora_folder"
-lora_icon_path = "C:\\Path\\To\\lora_icon_folder"
+# Create a temporary images directory
+temp_images_dir = os.path.join(comfy_dir, "temporary_images")
+os.makedirs(temp_images_dir, exist_ok=True)
 
-checkpoints_file_path = "C:\\Path\\To\\checkpoints_folder"
-checkpoints_icon_path = "C:\\Path\\To\\checkpoints_icon_folder"
+# Read favorites.json from comfy_dir and check existence
+workflows_dir = os.path.join(comfy_dir, "Workflows")
+os.makedirs(workflows_dir, exist_ok=True)
 
-comfy_dir_name = "comfy"
+favorites_json_path = os.path.join(workflows_dir, "favorites.json")
+favorites_exists = os.path.exists(favorites_json_path)
+if favorites_exists:
+    with open(favorites_json_path, "r", encoding="utf-8") as f:
+        favorites_data = json.load(f)
+    favorites = favorites_data.get("favorites", [])
+else:
+    favorites = []
+
+### Set values for defaults ###
+data_dir = os.path.join(comfy_dir, "data")
+os.makedirs(data_dir, exist_ok=True)
 
 last_inputs_file_name = "last_inputs.json"
+last_inputs_file_path = os.path.join(data_dir, last_inputs_file_name)
 
-generated_workflow_file_name = "GIMP_workflow.json"
+generic_workflow_file_name = "GIMP_workflow.json"
+generic_workflow_file_path = os.path.join(data_dir, generic_workflow_file_name)
+generated_workflow_file_name = "GIMP_iti_workflow.json"
+generated_workflow_file_path = os.path.join(data_dir, generated_workflow_file_name)
 
 log_file_name = "data_receive_log.txt"
 
@@ -71,27 +77,23 @@ select_all_if_empty = True
 
 timeout_duration = 60  # Timeout duration in seconds
 
-def create_comfy_dir():
-    gimp_dir = Gimp.directory()
-    comfy_dir = os.path.join(gimp_dir, comfy_dir_name)
-    if not os.path.exists(comfy_dir):
-        os.makedirs(comfy_dir)
-    return comfy_dir
-
-def get_model_files_with_icons(model_file_path, model_icon_path):
+def get_model_files_with_icons(model_file_path, model_icon_path=None):
     if not os.path.exists(model_file_path):
         return None
-    model_files = [f for f in os.listdir(model_file_path) if f.endswith(".safetensors")]
+    supported_model_exts = ['.safetensors', '.ckpt', '.pt']
+    supported_icon_exts = ['.png', '.jpg', '.jpeg', '.webp']
+    model_files = [f for f in os.listdir(model_file_path) if any(f.lower().endswith(ext) for ext in supported_model_exts)]
     model_data = []
 
     for model_file in model_files:
         file_name, file_ext = os.path.splitext(model_file)
         icon_file = None
-        for ext in [".png", ".jpg", ".jpeg", ".webp"]:
-            potential_icon = os.path.join(model_icon_path, file_name + ext)
-            if os.path.exists(potential_icon):
-                icon_file = potential_icon
-                break
+        if model_icon_path and os.path.exists(model_icon_path):
+            for ext in supported_icon_exts:
+                potential_icon = os.path.join(model_icon_path, file_name + ext)
+                if os.path.exists(potential_icon):
+                    icon_file = potential_icon
+                    break
         model_data.append({
             "file": os.path.join(model_file_path, model_file),
             "icon": icon_file
@@ -99,11 +101,7 @@ def get_model_files_with_icons(model_file_path, model_icon_path):
 
     return model_data
 
-try:
-    lora_data = get_model_files_with_icons(lora_file_path, lora_icon_path)
-    checkpoint_data = get_model_files_with_icons(checkpoints_file_path, checkpoints_icon_path)
-except:
-    pass
+select_all_if_empty = True
 
 ############################################################################################################
 # Create Sampler and Scheduler options
@@ -116,18 +114,16 @@ SchedulerOptions = ["normal", "karras", "exponential", "sgm_uniform", "simple", 
 # ***********************************************
 #           Image to Image Generation Functions
 # ***********************************************
-def prepare_input(img_type, image, drawable, server_address, area, ext, comfy_dir):
+def prepare_input(img_type, image, drawable, server_address, area, ext):
     try:
-        
         temp_file_name = "temp.{0}".format(ext)
-        temp_file_path = os.path.join(comfy_dir, temp_file_name)
+        temp_file_path = os.path.join(temp_images_dir, temp_file_name)
         temp_file_path_gio = Gio.File.new_for_path(temp_file_path)
-        last_image_inputs_file = os.path.join(comfy_dir, last_inputs_file_name)
         last_image_inputs_data = {}
         comfy_name = None
         try:
-            if os.path.exists(last_image_inputs_file):
-                with open(last_image_inputs_file, "r") as file:
+            if os.path.exists(last_inputs_file_path):
+                with open(last_inputs_file_path, "r") as file:
                     last_image_inputs_data = json.load(file)
                     if last_image_inputs_data.get(img_type):
                         comfy_name = last_image_inputs_data[img_type]["comfy_name"]
@@ -156,7 +152,7 @@ def prepare_input(img_type, image, drawable, server_address, area, ext, comfy_di
         Gimp.progress_set_text("Exporting...")
         Gimp.file_save(1, temp_image, temp_file_path_gio, None)
 
-        shutil.copy(temp_file_path, os.path.join(comfy_dir, "mask.png"))
+        shutil.copy(temp_file_path, os.path.join(temp_images_dir, "mask.png"))
 
         project_name = Gimp.Image.get_name(image)
         project_name = project_name.replace(" ", "_")
@@ -194,7 +190,7 @@ def prepare_input(img_type, image, drawable, server_address, area, ext, comfy_di
             "ext": ext
         }
 
-        update_json_file(last_image_inputs_data, last_image_inputs_file)
+        update_json_file(last_image_inputs_data, last_inputs_file_path)
 
     except Exception as e:
         Gimp.message(f"Error Preparing Input {img_type}: {e}")
@@ -316,10 +312,10 @@ def prepare_workflow(workflow_path, main_dict, lora_dict, ksampler_dict, input_i
         
     return workflow, save_inputs
     
-def insert_preview_layer(image, preview_data, prev_layer, comfy_dir):
+def insert_preview_layer(image, preview_data, prev_layer):
     preview_layer = prev_layer
 
-    temp_file_path = os.path.join(comfy_dir, "temp.jpg")
+    temp_file_path = os.path.join(temp_images_dir, "temp.jpg")
     jfif = BytesIO(preview_data)
     
     with open(temp_file_path, "wb") as temp_file:
@@ -356,7 +352,7 @@ def is_jsonable(x):
     except (TypeError, OverflowError, ValueError):
         return False
     
-def write_to_log_file(data, comfy_dir):
+def write_to_log_file(data):
     log_file_path = os.path.join(comfy_dir, log_file_name)
     try:
         with open(log_file_path, "a") as log_file:
@@ -368,24 +364,29 @@ def write_to_json_file(data, file_path):
     with open(file_path, "w") as file:
         json.dump(data, file, indent=4)
 
-def update_json_file(data, file_path):
+def load_json_file(file_path):
     if os.path.exists(file_path):
-        with open(file_path, "r") as file:
-            existing_data = json.load(file)
-    else:
-        existing_data = {}
+        try:
+            with open(file_path, 'r') as file:
+                return json.load(file)
+        except (json.JSONDecodeError, IOError, FileNotFoundError):
+            # Return an empty dictionary on any error
+            return {}
+    return {}
+
+def update_json_file(data, file_path):
+    existing_data = load_json_file(file_path)
     existing_data.update(data)
     write_to_json_file(existing_data, file_path)
 
-def load_previous_inputs(comfy_dir):
-    previous_inputs_path = os.path.join(comfy_dir, last_inputs_file_name)
+def load_previous_inputs(previous_inputs_path):
     previous_inputs = {}
     if os.path.exists(previous_inputs_path):
         with open(previous_inputs_path, "r") as text_inputs_file:
             previous_inputs = json.load(text_inputs_file)
     return previous_inputs, previous_inputs_path
 
-def generate(workflow, image, server_address, comfy_dir):
+def generate(workflow, image, server_address):
     Gimp.progress_set_text("Generating...")
 
     client_id = str(uuid.uuid4())
@@ -399,9 +400,6 @@ def generate(workflow, image, server_address, comfy_dir):
 
     while True:
         data_receive = ws.recv()
-
-        # # Debugging
-        # write_to_log_file(data_receive, comfy_dir)
 
         if is_jsonable(data_receive):
             message_json = json.loads(data_receive)
@@ -428,7 +426,7 @@ def generate(workflow, image, server_address, comfy_dir):
             if int_value == 1:
                 preview_data = data_receive[8:]
                 try:
-                    preview_layer = insert_preview_layer(image, preview_data, preview_layer, comfy_dir)
+                    preview_layer = insert_preview_layer(image, preview_data, preview_layer)
                 except:
                     continue
             else:
@@ -441,7 +439,7 @@ def generate(workflow, image, server_address, comfy_dir):
   
     return outputs
 
-def insert_outputs(outputs, image, server_address, seed, offsets, comfy_dir):
+def insert_outputs(outputs, image, server_address, seed, offsets):
     for output in outputs:
         if not "filename" in output:
             continue
@@ -456,7 +454,7 @@ def insert_outputs(outputs, image, server_address, seed, offsets, comfy_dir):
 
         ext = output_file_name.split(".")[-1]
         temp_file_name = "temp.{0}".format(ext)
-        temp_file_path = os.path.join(comfy_dir, temp_file_name)
+        temp_file_path = os.path.join(temp_images_dir, temp_file_name)
         shutil.move(output_file_path, temp_file_path)
         output_layer = Gimp.file_load_layer(1, image, Gio.File.new_for_path(temp_file_path))
         output_layer.set_name(str(seed))
@@ -468,6 +466,178 @@ def get_workflow_path(workflow_name):
             return favorite["path"]
     return None
 
+### Favorites Management Class
+class FavoritesManager:
+    """Manages adding and storing favorite workflow files."""
+    def __init__(self):
+        pass
+
+    def load_favorites(self):
+        """Loads the favorites data from the JSON file."""
+        if not os.path.exists(favorites_json_path):
+            return {"favorites": []}
+        try:
+            with open(favorites_json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Ensure the root "favorites" key with a list exists
+                if "favorites" not in data or not isinstance(data.get("favorites"), list):
+                    return {"favorites": []}
+                return data
+        except (json.JSONDecodeError, IOError):
+            return {"favorites": []}
+
+    def save_favorites(self, data):
+        """Saves the favorites data to the JSON file."""
+        try:
+            with open(favorites_json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
+        except IOError as e:
+            print(f"Error saving favorites: {e}")
+
+    def add_favorites(self, file_paths_to_add):
+        """Adds a list of file paths to favorites, checking for JSON and duplicates."""
+        favorites_data = self.load_favorites()
+        # Create a set of existing paths for duplicate checking
+        existing_paths = {fav['path'] for fav in favorites_data.get("favorites", [])}
+        added_count = 0
+
+        for path in file_paths_to_add:
+            if path.lower().endswith('.json') and path not in existing_paths:
+                title = os.path.basename(path)[:-5] # Get filename without .json
+                new_entry = {"path": path, "title": title}
+                favorites_data["favorites"].append(new_entry)
+                existing_paths.add(path)
+                added_count += 1
+        
+        if added_count > 0:
+            self.save_favorites(favorites_data)
+        
+        return added_count
+
+## History Management Class
+class HistoryManager:
+    """Manages storing, retrieving, and deleting prompt history."""
+    def __init__(self):
+        self.history_path = os.path.join(comfy_dir, 'History')
+        self.history_file = os.path.join(self.history_path, 'prompt_history.json')
+        
+        if not os.path.exists(self.history_path):
+            os.makedirs(self.history_path)
+
+    def load_history(self):
+        """Loads history from the JSON file."""
+        if not os.path.exists(self.history_file):
+            return []
+        try:
+            with open(self.history_file, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return []
+
+    def save_history(self, history_data):
+        """Saves the provided history data to the JSON file."""
+        with open(self.history_file, 'w') as f:
+            json.dump(history_data, f, indent=4)
+            
+    def add_entry(self, positive_prompt, negative_prompt):
+        """Adds a new entry to the history, avoiding duplicates."""
+        history = self.load_history()
+        new_entry = {"positive": positive_prompt, "negative": negative_prompt}
+        if not positive_prompt and not negative_prompt:
+            return
+        if new_entry not in history:
+            history.insert(0, new_entry)
+            self.save_history(history)
+
+    def delete_entry(self, entry_to_delete):
+        """Deletes a specific entry from the history."""
+        history = self.load_history()
+        # Create a new list excluding the entry that matches the one to be deleted
+        new_history = [entry for entry in history if entry != entry_to_delete]
+        
+        if len(new_history) < len(history):
+            self.save_history(new_history)
+            return True # Item was deleted
+        return False
+
+## History Selection Dialog
+class HistoryDialog(Gtk.Dialog):
+    def __init__(self, parent, history_manager):
+        super().__init__(title="Prompt History", transient_for=parent, flags=0)
+        self.history_manager = history_manager
+        
+        self.add_buttons(
+            "Select", Gtk.ResponseType.OK,
+            "Close", Gtk.ResponseType.CLOSE
+        )
+        self.set_default_size(600, 400)
+        self.set_border_width(10)
+        self.selected_entry = None
+
+        content_area = self.get_content_area()
+        scrolled_window = Gtk.ScrolledWindow()
+        scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        content_area.pack_start(scrolled_window, True, True, 0)
+
+        self.list_box = Gtk.ListBox()
+        self.list_box.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        scrolled_window.add(self.list_box)
+
+        # Populate rows
+        history_data = self.history_manager.load_history()
+        for entry in history_data:
+            self.add_history_row(entry)
+        
+        self.list_box.connect("row-activated", self.on_row_activated)
+        self.show_all()
+
+    def add_history_row(self, entry):
+        """Creates a row with a label and a delete button."""
+        row = Gtk.ListBoxRow()
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row.add(hbox)
+
+        pos_text = (entry['positive'][:70] + '...') if len(entry['positive']) > 70 else entry['positive']
+        neg_text = (entry['negative'][:70] + '...') if len(entry['negative']) > 70 else entry['negative']
+        label = Gtk.Label(label=f"Positive: {pos_text}\nNegative: {neg_text}", xalign=0)
+        hbox.pack_start(label, True, True, 5)
+
+        delete_button = Gtk.Button.new_from_icon_name("edit-delete", Gtk.IconSize.BUTTON)
+        delete_button.set_tooltip_text("Delete this entry")
+        delete_button.connect("clicked", self.on_delete_entry_clicked, row)
+        hbox.pack_start(delete_button, False, False, 5)
+        
+        row.entry_data = entry
+        self.list_box.insert(row, -1)
+
+    def on_delete_entry_clicked(self, widget, row):
+        """Handles the click of a delete button on a row."""
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text="Delete this entry?",
+        )
+        dialog.format_secondary_text("This action cannot be undone.")
+        
+        response = dialog.run()
+        if response == Gtk.ResponseType.YES:
+            if self.history_manager.delete_entry(row.entry_data):
+                self.list_box.remove(row)
+                self.show_all()
+        dialog.destroy()
+
+    def on_row_activated(self, list_box, row):
+        """Responds to a double-click on a row, same as clicking 'Select'."""
+        self.selected_entry = row.entry_data
+        self.response(Gtk.ResponseType.OK)
+
+    def get_selected_entry(self):
+        if self.selected_entry:
+            return self.selected_entry
+        row = self.list_box.get_selected_row()
+        return row.entry_data if row else None
+
 # ***********************************************
 #           GIMP Dialog and Procedure
 # ***********************************************
@@ -475,6 +645,8 @@ class MainProcedureDialog(GimpUi.ProcedureDialog):
     def __init__(self, procedure, config, previous_inputs):
         super().__init__(procedure=procedure, config=config)
         self.set_default_size(700, 700)
+        self.history_manager = HistoryManager()
+        self.favorites_manager = FavoritesManager()
 
         # Apply CSS
         self.apply_css()
@@ -492,12 +664,41 @@ class MainProcedureDialog(GimpUi.ProcedureDialog):
         content_box.get_style_context().add_class("content_box")
 
         # Positive Prompt
-        self.positive_textview = self.add_labeled_textview(content_box, "Positive Prompt", previous_inputs.get("positive_ITI_prompt", ""))
+        self.positive_textview = self.add_labeled_textview(content_box, "Positive Prompt", previous_inputs.get("positive_generate_prompt", ""))
         # Negative Prompt
-        self.negative_textview = self.add_labeled_textview(content_box, "Negative Prompt", previous_inputs.get("negative_ITI_prompt", ""))
+        self.negative_textview = self.add_labeled_textview(content_box, "Negative Prompt", previous_inputs.get("negative_generate_prompt", ""))
+
+        # Action buttons
+        action_buttons_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        
+        # History Button
+        self.history_button = Gtk.Button.new_with_label("Prompt History")
+        self.history_button.connect("clicked", self.on_reveal_history_clicked)
+        action_buttons_hbox.pack_start(self.history_button, False, False, 0)
+        self.update_history_button_sensitivity()
+
+        # Favorites Button
+        add_favorite_button = Gtk.Button(label="Add Favorite Workflow")
+        add_favorite_button.set_tooltip_text("Add one or more .json workflow files to your favorites.")
+        add_favorite_button.connect("clicked", self.on_add_favorite_clicked)
+        action_buttons_hbox.pack_end(add_favorite_button, False, False, 0)
+
+        content_box.pack_start(action_buttons_hbox, False, False, 10)
+
+        workflow_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        workflow_label = Gtk.Label(label="Workflow", xalign=0)
+        self.workflow_combo = Gtk.ComboBoxText()
+        workflow_box.pack_start(workflow_label, False, False, 0)
+        workflow_box.pack_start(self.workflow_combo, False, False, 0)
+        
+        # Populate the dropdown from favorites.json
+        self.populate_workflows_dropdown()
+
+        self.workflow_combo.connect("changed", self.on_workflow_selected)
+        content_box.pack_start(workflow_box, False, False, 10)
 
         # Populate GIMP's default argument UI elements
-        self.fill(None)  # This adds the GIMP argument widgets to the content area
+        self.fill(None)
 
         child_list = content_area.get_children()
         ksampler_children = []
@@ -515,10 +716,12 @@ class MainProcedureDialog(GimpUi.ProcedureDialog):
 
         # Expandable Icon Views
         try:
-            self.checkpoints_view = self.add_expandable_section(content_box, "Checkpoints", "icon_view", checkpoint_data, Gtk.SelectionMode.SINGLE)
-            self.loras_view = self.add_expandable_section(content_box, "Loras", "icon_view", lora_data, Gtk.SelectionMode.MULTIPLE)
-        except:
-            pass
+            self.checkpoints_view = self.add_expandable_section(content_box, "Checkpoints", "icon_view", [], Gtk.SelectionMode.SINGLE)
+            self.loras_view = self.add_expandable_section(content_box, "Loras", "icon_view", [], Gtk.SelectionMode.MULTIPLE)
+            self.initialize_icon_view_from_config("Checkpoints")
+            self.initialize_icon_view_from_config("Loras")
+        except Exception as e:
+            print(f"Error creating expandable sections: {e}")
 
         # Add the box inside the scrolled window
         scrolled_window.add(content_box)
@@ -527,6 +730,100 @@ class MainProcedureDialog(GimpUi.ProcedureDialog):
         content_area.pack_start(scrolled_window, True, True, 0)
 
         self.show_all()
+
+    def populate_workflows_dropdown(self):
+        """Loads favorites and populates the workflow ComboBox."""
+        favorites_data = self.favorites_manager.load_favorites()
+        
+        # Add each favorite from the JSON file
+        for fav in favorites_data.get("favorites", []):
+            # The ID is the path, the visible text is the title
+            self.workflow_combo.append(fav['path'], fav['title'])
+        
+        if not favorites_data.get("favorites"):
+            self.workflow_combo.append(None, "Select a Favorite Workflow...")
+
+        self.workflow_combo.set_active(0)
+        self.selected_workflow_path = self.workflow_combo.get_active_id()
+    
+    def on_workflow_selected(self, combo):
+        """
+        Handles the selection of a workflow from the dropdown.
+        Stores the selected workflow's file path.
+        """
+        self.selected_workflow_path = combo.get_active_id()
+
+    def on_add_favorite_clicked(self, widget):
+        """Opens a file chooser to select and add favorite JSON workflows."""
+        dialog = Gtk.FileChooserDialog(
+            title="Please choose one or more workflow files",
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OPEN, Gtk.ResponseType.OK,
+        )
+        dialog.set_select_multiple(True)
+
+        # Show only JSON files
+        json_filter = Gtk.FileFilter()
+        json_filter.set_name("JSON files (*.json)")
+        json_filter.add_pattern("*.json")
+        dialog.add_filter(json_filter)
+
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            file_paths = dialog.get_filenames()
+            added_count = self.favorites_manager.add_favorites(file_paths)
+            
+            info_dialog = Gtk.MessageDialog(
+                transient_for=self,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text=f"Added {added_count} new favorite(s).",
+            )
+            skipped_count = len(file_paths) - added_count
+            if skipped_count > 0:
+                info_dialog.format_secondary_text(
+                    f"{skipped_count} file(s) were skipped (already a favorite or not a .json file)."
+                )
+            if added_count > 0:
+                self.workflow_combo.remove_all()
+                self.populate_workflows_dropdown()
+            
+            info_dialog.run()
+            info_dialog.destroy()
+
+        dialog.destroy()
+
+    def on_reveal_history_clicked(self, widget):
+        dialog = HistoryDialog(self, self.history_manager)
+        response = dialog.run()
+
+        if response == Gtk.ResponseType.OK:
+            selected = dialog.get_selected_entry()
+            if selected:
+                self.positive_textview.get_buffer().set_text(selected.get("positive", ""))
+                self.negative_textview.get_buffer().set_text(selected.get("negative", ""))
+        
+        dialog.destroy()
+        # After closing, check if history is empty (e.g., if user deleted all entries)
+        self.update_history_button_sensitivity()
+
+    def update_history_button_sensitivity(self):
+        """Enables or disables the history button based on whether history exists."""
+        has_history = bool(self.history_manager.load_history())
+        self.history_button.set_sensitive(has_history)
+        
+    def save_current_inputs_to_history(self):
+        positive_buffer = self.positive_textview.get_buffer()
+        negative_buffer = self.negative_textview.get_buffer()
+        positive_text = positive_buffer.get_text(positive_buffer.get_start_iter(), positive_buffer.get_end_iter(), True)
+        negative_text = negative_buffer.get_text(negative_buffer.get_start_iter(), negative_buffer.get_end_iter(), True)
+        
+        self.history_manager.add_entry(positive_text, negative_text)
+        self.update_history_button_sensitivity()
 
     def apply_css(self):
         css = """
@@ -583,46 +880,178 @@ class MainProcedureDialog(GimpUi.ProcedureDialog):
             parent.pack_start(box, False, False, 0)
 
             return textview
-    
-    def create_icon_view(self, icon_data, selection_mode, item_class="icon_view"):
-        # Pixbuf for icon, str for filename
-        list_store = Gtk.ListStore(GdkPixbuf.Pixbuf, str)
-
-        for item in icon_data:
-            try:
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(item["icon"], 128, 128)  # Resize icons
-            except Exception as e:
-                print(f"Error loading {item['icon']}: {e}")
-                pixbuf = None  # None if icon can't be loaded
-            list_store.append([pixbuf, os.path.basename(item["file"]).replace(".safetensors", "")])
-
-        # Create IconView
-        icon_view = Gtk.IconView.new()
-        icon_view.get_style_context().add_class(item_class)
-        icon_view.set_model(list_store)
-        icon_view.set_selection_mode(selection_mode)  # Allow multiple or single selection
-        icon_view.set_pixbuf_column(0)  # Use first column for icons
-        icon_view.set_text_column(1)    # Use second column for text
-        icon_view.set_item_width(80)    # Adjust item width for better layout
-
-        return icon_view
 
     def add_expandable_section(self, parent, title, sub_window, data, aux_data, width=400, height=300):
         expander = Gtk.Expander(label=title)
         expander.get_style_context().add_class("expander")
 
         if sub_window == "icon_view":
-            window_content = self.create_icon_view(data, aux_data)
+            # Main container
+            container_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+
+            button_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            button_hbox.set_margin_top(5)
+            
+            file_dir_button = Gtk.Button(label="Set Models Folder")
+            icon_dir_button = Gtk.Button(label="Set Icons Folder")
+
+            # Connect signals, passing the 'title' to identify the section (e.g., "Checkpoints")
+            file_dir_button.connect("clicked", self.on_set_folder_clicked, title, "models")
+            icon_dir_button.connect("clicked", self.on_set_folder_clicked, title, "icons")
+
+            button_hbox.pack_start(file_dir_button, False, False, 0)
+            button_hbox.pack_start(icon_dir_button, False, False, 0)
+            container_box.pack_start(button_hbox, False, False, 0)
+
+            # Create the icon view and get its data
+            icon_view, list_store = self.create_icon_view(data, aux_data)
+            
+            if not hasattr(self, 'icon_view_models'):
+                self.icon_view_models = {}
+            self.icon_view_models[title] = list_store
+            
             scrolled_window = self.create_scrolled_window("expander_scrolled_window", Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC, width, height)
-            scrolled_window.add(window_content)
-            expander.add(scrolled_window)
+            scrolled_window.add(icon_view)
+            container_box.pack_start(scrolled_window, True, True, 0)
+            
+            expander.add(container_box)
+            window_content = icon_view
+
         elif sub_window == "ksampler":
             window_content = self.create_ksampler_section(data)
             expander.add(window_content)
         
         parent.pack_start(expander, False, False, 0)
-
         return window_content
+
+    def create_icon_view(self, icon_data, selection_mode, item_class="icon_view"):
+        """Creates an IconView with a model that stores the full file path."""
+        list_store = Gtk.ListStore(GdkPixbuf.Pixbuf, str, str)
+
+        self.populate_icon_view_model(list_store, icon_data)
+
+        icon_view = Gtk.IconView.new_with_model(list_store)
+        icon_view.get_style_context().add_class(item_class)
+        icon_view.set_selection_mode(selection_mode)
+        
+        icon_view.set_pixbuf_column(0)
+        icon_view.set_text_column(1)
+        icon_view.set_item_width(80)
+
+        return icon_view, list_store
+
+    def populate_icon_view_model(self, list_store, icon_data):
+        """Fills a ListStore with icon, name, and the full file path."""
+        list_store.clear()
+        for item in icon_data:
+            pixbuf = None
+            try:
+                if item.get("icon") and os.path.exists(item["icon"]):
+                    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(item["icon"], 128, 128)
+            except Exception:
+                pixbuf = None
+            
+            if not pixbuf:
+                pass
+                # Optionally create a placeholder pixbuf if no icon is found
+                # pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 128, 128)
+                # pixbuf.fill(0xD3D3D3FF)
+
+            model_name_no_ext = os.path.splitext(os.path.basename(item["file"]))[0]
+            list_store.append([pixbuf, model_name_no_ext, item["file"]])
+
+    def initialize_icon_view_from_config(self, section_title):
+        """Checks the config file for paths and populates the IconView if found."""
+        last_inputs = load_json_file(last_inputs_file_path)
+        
+        key_base = section_title.lower()
+        model_key = f"{key_base}_models_folder"
+        icon_key = f"{key_base}_icons_folder"
+
+        model_dir = last_inputs.get(model_key)
+        icon_dir = last_inputs.get(icon_key)
+
+        if model_dir and os.path.isdir(model_dir):
+            print(f"Found saved path for '{section_title}' models: {model_dir}")
+            
+            if not hasattr(self, 'custom_paths'):
+                self.custom_paths = {}
+            self.custom_paths[section_title] = {'models': model_dir, 'icons': icon_dir}
+            
+            # Scan the folders and update the UI
+            self.rescan_and_update_icon_view(section_title)
+
+    def on_set_folder_clicked(self, widget, section_title, folder_type):
+        """Handles clicks for the 'Set Folder' buttons and saves the choice."""
+        dialog = Gtk.FileChooserDialog(
+            title=f"Select {folder_type.capitalize()} Folder for {section_title}",
+            parent=self,
+            action=Gtk.FileChooserAction.SELECT_FOLDER,
+        )
+        dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, "Select", Gtk.ResponseType.OK)
+        
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            folder_path = dialog.get_filename()
+            
+            if not hasattr(self, 'custom_paths'):
+                self.custom_paths = {}
+            if section_title not in self.custom_paths:
+                self.custom_paths[section_title] = {'models': None, 'icons': None}
+            
+            self.custom_paths[section_title][folder_type] = folder_path
+            
+            key_base = section_title.lower()
+            json_key = f"{key_base}_{folder_type}_folder"  # e.g., "checkpoints_models_folder"
+            data_to_save = {json_key: folder_path}
+            update_json_file(data_to_save, last_inputs_file_path)
+            print(f"Saved '{json_key}' to '{last_inputs_file_path}'")
+            
+            # Rescan and update of the corresponding icon view
+            self.rescan_and_update_icon_view(section_title)
+
+        dialog.destroy()
+
+    def rescan_and_update_icon_view(self, section_title):
+        paths = self.custom_paths.get(section_title, {})
+        model_dir = paths.get('models')
+        icon_dir = paths.get('icons')
+        
+        if not model_dir:
+            print(f"Model directory for '{section_title}' has not been set.")
+            return
+
+        print(f"Rescanning '{section_title}'... Models: '{model_dir}', Icons: '{icon_dir}'")
+        new_data = self.scan_directory_for_items(model_dir, icon_dir)
+        
+        list_store = self.icon_view_models.get(section_title)
+        if list_store:
+            self.populate_icon_view_model(list_store, new_data)
+
+    def scan_directory_for_items(self, model_dir, icon_dir=None):
+        supported_model_exts = ['.safetensors', '.ckpt', '.pt']
+        supported_icon_exts = ['.png', '.jpg', '.jpeg', '.webp']
+        items = []
+
+        if not os.path.isdir(model_dir):
+            return []
+
+        for filename in os.listdir(model_dir):
+            if any(filename.lower().endswith(ext) for ext in supported_model_exts):
+                model_path = os.path.join(model_dir, filename)
+                item = {"file": model_path, "icon": None}
+                
+                # If an icon directory is provided, search for a matching icon
+                if icon_dir and os.path.isdir(icon_dir):
+                    model_name_base = os.path.splitext(filename)[0]
+                    for icon_ext in supported_icon_exts:
+                        potential_icon_path = os.path.join(icon_dir, model_name_base + icon_ext)
+                        if os.path.exists(potential_icon_path):
+                            item["icon"] = potential_icon_path
+                            break # Found a matching icon
+                items.append(item)
+                
+        return items
     
     def create_ksampler_section(self, data):
         ksampler_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -640,6 +1069,33 @@ class MainProcedureDialog(GimpUi.ProcedureDialog):
     
     def get_selected_items(self, icon_view):
         return [str(item) for item in icon_view.get_selected_items()]
+
+    def get_selected_checkpoint(self, icon_view):
+        model = icon_view.get_model()
+        selected_items = icon_view.get_selected_items()
+
+        for item_path in selected_items:
+            tree_iter = model.get_iter(item_path)
+            file_path = model.get_value(tree_iter, 2)
+            file_name = os.path.basename(file_path)
+            
+        return file_name
+
+    def get_selected_lora_data(self, icon_view):
+        """
+        Returns a list of file names (not full paths) for selected items in an IconView.
+        """
+        names = []
+        model = icon_view.get_model()
+        selected_items = icon_view.get_selected_items()
+
+        for item_path in selected_items:
+            tree_iter = model.get_iter(item_path)
+            file_path = model.get_value(tree_iter, 2)
+            file_name = os.path.basename(file_path)
+            names.append(file_name)
+            
+        return names
 
 # ***********************************************
 #           Lora Dialog and Procedure
@@ -671,7 +1127,10 @@ class LoraDialog(GimpUi.ProcedureDialog):
                 continue
             content_area.remove(child)  # Remove them
 
-        self.lora_box = self.create_lora_box(content_box, lora_selection)
+        try:
+            self.lora_box = self.create_lora_box(content_box, lora_selection)
+        except:
+            pass
 
         # Add the box inside the scrolled window
         scrolled_window.add(content_box)
@@ -685,15 +1144,13 @@ class LoraDialog(GimpUi.ProcedureDialog):
         lora_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         lora_box.get_style_context().add_class("lora_box")
 
-        for lora in lora_selection:
-            current_lora_data = lora_data[int(lora)]
-            lora_file = current_lora_data["file"]
-            lora_name = os.path.basename(lora_file).replace(".safetensors", "")
+        for lora_file_path in lora_selection:
+            lora_name = os.path.basename(lora_file_path)
 
             lora_label = Gtk.Label(label=lora_name)
 
             # Create a double spinner for the Lora weight
-            adjustment = Gtk.Adjustment(value=0, lower=-5, upper=5, step_increment=0.01, page_increment=0.1, page_size=0)
+            adjustment = Gtk.Adjustment(value=1, lower=-5, upper=5, step_increment=0.01, page_increment=0.1, page_size=0)
             lora_spinner = Gtk.SpinButton(adjustment=adjustment, climb_rate=0.01, digits=2)
             lora_spinner.set_numeric(True)
 
@@ -718,26 +1175,29 @@ def get_main_dialog(procedure, config, previous_inputs):
     dialog = MainProcedureDialog(procedure, config, previous_inputs)
     response = dialog.run()
     if response:
-        main_dict["positive_prompt"], main_dict["negative_prompt"] = dialog.get_text_results()
-
+        try:
+            dialog.save_current_inputs_to_history()
+            main_dict["positive_prompt"], main_dict["negative_prompt"] = dialog.get_text_results()
+            main_dict["workflow"] = dialog.selected_workflow_path
+        except Exception as e:
+            write_to_log_file(f"Error in get_main_dialog (workflow): {e}\n")
         try:
             checkpoint_index = dialog.get_selected_items(dialog.checkpoints_view)
             if checkpoint_index:
-                main_dict["checkpoint_selection"] = os.path.basename(checkpoint_data[int(checkpoint_index[0])]["file"])
+                main_dict["checkpoint_selection"] = dialog.get_selected_checkpoint(dialog.checkpoints_view)
             else:
                 main_dict["checkpoint_selection"] = None
         except:
             main_dict["checkpoint_selection"] = None
         try:
-            main_dict["lora_selection"] = dialog.get_selected_items(dialog.loras_view)
+            main_dict["lora_selection"] = dialog.get_selected_lora_data(dialog.loras_view)
         except:
             main_dict["lora_selection"] = None
     else:
         return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
-
+    
     main_dict["denoise"] = config.get_property('denoise')
     main_dict["seed"] = config.get_property('seed')
-    main_dict["workflow"] = config.get_property('workflow')
     main_dict["source_image"] = config.get_property('source')
     main_dict["export_format"] = config.get_property('format')
     ksampler_dict = {"steps": config.get_property('steps'), "cfg": config.get_property('cfg'), "sampler": config.get_property('sampler'), "scheduler": config.get_property('scheduler')}
@@ -756,7 +1216,7 @@ def get_lora_dialog(procedure, config, lora_selection):
             lora_dict = lora_dialog.get_lora_dict()
             lora_dialog.destroy()
         else:
-            raise RuntimeError("Lora dialog was canceled by the user.")
+            return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
     else:
         lora_dict = None
     return lora_dict
@@ -815,13 +1275,6 @@ class GimpITI (Gimp.PlugIn):
         # Seed
         procedure.add_int_argument("seed", "_Seed", "Seed", -1, 2147483647, -1,
                                 GObject.ParamFlags.READWRITE)
-        # Workflow
-        workflow_choice = Gimp.Choice.new()
-        for idx, favorite in enumerate(favorites):
-            workflow_choice.add(favorite["title"], idx, favorite["title"], favorite["title"])
-        procedure.add_choice_argument("workflow", "_Workflow", 
-                                    "Workflow", workflow_choice, favorites[0]["title"],
-                                    GObject.ParamFlags.READWRITE)
         # Source Image
         source_image_choice = Gimp.Choice.new()
         source_image_choice.add("visible", 1, "Visible", "visible")
@@ -843,8 +1296,7 @@ class GimpITI (Gimp.PlugIn):
         try:
             if run_mode == Gimp.RunMode.INTERACTIVE:
                 Gimp.progress_init("Waiting...")
-                comfy_dir = create_comfy_dir()
-                previous_inputs, previous_inputs_path = load_previous_inputs(comfy_dir)
+                previous_inputs, previous_inputs_path = load_previous_inputs(last_inputs_file_path)
 
                 try:
                     main_dict, ksampler_dict = get_main_dialog(procedure, config, previous_inputs)
@@ -854,22 +1306,22 @@ class GimpITI (Gimp.PlugIn):
                         lora_dict = None
                 except Exception as e:
                     return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
-
+                
                 Gimp.Image.undo_group_start(image)
                 Gimp.context_push()
 
                 try:
-                    if main_dict["seed"] == -1:
+                    if main_dict["seed"] == -1 or main_dict["seed"] == 0:
                         main_dict["seed"] = random.randint(1, 4294967295)
 
                     # Prepare Inputs
-                    workflow_path = get_workflow_path(main_dict["workflow"])
+                    workflow_path = main_dict["workflow"]
                     offsets = Gimp.Drawable.get_offsets(drawables[0])
 
                     Gimp.progress_set_text("Preparing inputs...")
                     try:
-                        input_image_name = prepare_input("image", image, drawables[0], default_server_address, main_dict["source_image"], main_dict["export_format"], comfy_dir)
-                        input_mask_name = prepare_input("mask", image, drawables[0], default_server_address, main_dict["source_image"], "PNG", comfy_dir)
+                        input_image_name = prepare_input("image", image, drawables[0], default_server_address, main_dict["source_image"], main_dict["export_format"])
+                        input_mask_name = prepare_input("mask", image, drawables[0], default_server_address, main_dict["source_image"], "PNG")
                     except Exception as e:
                         Gimp.message(f"Error Preparing Inputs: {e}")
                         return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
@@ -886,14 +1338,14 @@ class GimpITI (Gimp.PlugIn):
                         update_json_file(text_inputs, previous_inputs_path)
 
                     # Write Workflow
-                    workflow_json_path = os.path.join(comfy_dir, generated_workflow_file_name)
-                    write_to_json_file(workflow, workflow_json_path)
+                    write_to_json_file(workflow, generated_workflow_file_path)
+                    write_to_json_file(workflow, generic_workflow_file_path)
 
                     # Prepare Outputs
-                    outputs = generate(workflow, image, default_server_address, comfy_dir)
+                    outputs = generate(workflow, image, default_server_address)
 
                     # Insert Outputs
-                    insert_outputs(outputs, image, default_server_address, main_dict["seed"], offsets, comfy_dir)
+                    insert_outputs(outputs, image, default_server_address, main_dict["seed"], offsets)
                 except Exception as e:
                     Gimp.message(f"Error: {e}")
                     return procedure.new_return_values(Gimp.PDBStatusType.CANCEL, GLib.Error())
